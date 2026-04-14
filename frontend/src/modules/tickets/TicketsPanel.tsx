@@ -34,7 +34,7 @@ function TicketList({ repo }: { repo: string }) {
           {tickets.map(t => (
             <div
               key={t.id}
-              className={`px-3 py-2 cursor-default select-none hover:bg-alf-surface
+              className={`px-3 py-2 cursor-pointer select-none hover:bg-white/5
                 ${selectedTicket?.id === t.id ? "bg-white/10" : ""}`}
               onClick={() => openTicket(t)}
             >
@@ -71,7 +71,7 @@ function TicketDetail() {
 
   return (
     <Panel>
-      <div className="px-3 py-2 border-b border-alf-border shrink-0">
+      <div className="px-3 py-2 border-b border-gray-700 shrink-0">
         <div className="font-mono text-sm text-gray-100">{selectedTicket.title}</div>
         <div className="flex gap-2 mt-1 flex-wrap">
           <span className="font-mono text-xs text-gray-600">{selectedTicket.id}</span>

@@ -33,8 +33,9 @@ export class GitModule {
     try {
       const raw = execSync("git worktree list --porcelain", { cwd: repoPath(repo), encoding: "utf8" });
       reply({ type: "git/worktrees", worktrees: parseWorktrees(raw) });
-    } catch (e) {
-      reply({ type: "error", error: String(e) });
+    } catch {
+      // Not a git repo or git unavailable — return empty list
+      reply({ type: "git/worktrees", worktrees: [] });
     }
   }
 
@@ -50,8 +51,9 @@ export class GitModule {
       if (file) args.push("--", file);
       const diff = execSync(args.join(" "), { cwd: repoPath(repo), encoding: "utf8" });
       reply({ type: "git/diff", diff, file: file ?? null });
-    } catch (e) {
-      reply({ type: "error", error: String(e) });
+    } catch {
+      // Not a git repo or git unavailable — return empty diff
+      reply({ type: "git/diff", diff: "", file: file ?? null });
     }
   }
 }
