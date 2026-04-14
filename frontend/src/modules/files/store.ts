@@ -6,16 +6,12 @@ export interface FileEntry {
   isDir: boolean;
 }
 
-interface RepoStore {
-  repos: string[];
+interface FilesStore {
   files: FileEntry[];
-  setRepos: (repos: string[]) => void;
   setFiles: (files: FileEntry[]) => void;
 }
 
-export const useRepoStore = create<RepoStore>((set) => ({
-  repos: [],
+export const useFilesStore = create<FilesStore>((set) => ({
   files: [],
-  setRepos: (repos) => set({ repos }),
   setFiles: (files) => set({ files }),
 }));

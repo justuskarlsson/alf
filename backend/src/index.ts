@@ -1,15 +1,13 @@
 /**
- * Alf Backend
- *
- * Connects to relay as a server. Handles WS messages from clients:
- *   repos/list  → { repos: string[] }
- *   files/list  → { repo: string } → { files: FileEntry[] }
- *
- * requestId is echoed back so the client can match responses to requests.
+ * Alf Backend — connects to relay as a server, dispatches messages to modules.
  */
 
 import { WebSocket } from "ws";
-import { listRepos, listFiles } from "./handlers.js";
+import { dispatch } from "./core/dispatch.js";
+
+// Register all module handlers (side-effect imports)
+import "./modules/repos/index.js";
+import "./modules/files/index.js";
 
 const RELAY_URL = process.env.RELAY_URL ?? "ws://localhost:3100";
 const RELAY_TOKEN = process.env.RELAY_TOKEN ?? "dev-token";
@@ -31,39 +29,6 @@ function send(msg: object) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
-function handle(raw: string) {
-  let msg: Record<string, unknown>;
-  try { msg = JSON.parse(raw); } catch { return; }
-
-  const { type, connectionId, requestId } = msg as {
-    type?: string;
-    connectionId?: string;
-    requestId?: string;
-  };
-
-  if (!connectionId) return; // relay control messages (client-connected etc.) — ignore
-
-  switch (type) {
-    case "repos/list": {
-      const repos = listRepos();
-      send({ type: "repos/list", connectionId, requestId, repos });
-      break;
-    }
-    case "files/list": {
-      const repo = msg.repo as string | undefined;
-      if (!repo) {
-        send({ type: "error", connectionId, requestId, error: "Missing repo" });
-        return;
-      }
-      const files = listFiles(repo);
-      send({ type: "files/list", connectionId, requestId, files });
-      break;
-    }
-    default:
-      log("Unknown message type", { type, connectionId });
-  }
-}
-
 function connect() {
   if (stopped) return;
 
@@ -79,13 +44,11 @@ function connect() {
     const raw = data.toString();
     let msg: Record<string, unknown>;
     try { msg = JSON.parse(raw); } catch { return; }
-
     if (msg.type === "connected") {
-      log("Authenticated with relay", { serverName: SERVER_NAME || "(default)" });
+      log("Authenticated", { serverName: SERVER_NAME || "(default)" });
       return;
     }
-
-    handle(raw);
+    dispatch(raw, send);
   });
 
   ws.on("close", () => {
@@ -95,9 +58,7 @@ function connect() {
     backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX_MS);
   });
 
-  ws.on("error", (e) => {
-    log("WS error", { error: String(e) });
-  });
+  ws.on("error", (e) => { log("WS error", { error: String(e) }); });
 }
 
 process.on("SIGTERM", () => { stopped = true; ws?.close(); process.exit(0); });

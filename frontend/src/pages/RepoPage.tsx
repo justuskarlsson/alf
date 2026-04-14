@@ -1,35 +1,40 @@
-import { useEffect } from "react";
-import { useParams } from "react-router-dom";
-import { useRelay } from "../lib/RelayProvider";
-import { useRepoStore, type FileEntry } from "../store/repoStore";
-import { FileListPanel } from "../components/FileListPanel";
+import { useRelay } from "../core/RelayProvider";
+import { useOnConnect } from "../core/useOnConnect";
+import { useFilesStore, type FileEntry } from "../modules/files/store";
+import { FileListPanel } from "../modules/files/FileListPanel";
+import { PanelGrid } from "../panels/PanelGrid";
 
-export function RepoPage() {
-  const { repo } = useParams<{ repo: string }>();
-  const { request, isConnected } = useRelay();
-  const { files, setFiles } = useRepoStore();
+interface Props {
+  repo: string;
+}
 
-  useEffect(() => {
-    if (!isConnected || !repo) return;
+// Note: RepoPage receives repo as a prop (not useParams) so the parent can set
+// key={repo} and force a full re-mount on repo change — avoiding useEffect deps.
+export function RepoPage({ repo }: Props) {
+  const { request } = useRelay();
+  const { setFiles } = useFilesStore();
+
+  useOnConnect(() => {
     setFiles([]);
     request<{ files: FileEntry[] }>({ type: "files/list", repo })
-      .then((res) => setFiles(res.files))
+      .then(res => setFiles(res.files))
       .catch(console.error);
-  }, [isConnected, repo]);
+  });
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100">
-      {/* Sidebar panel */}
-      <div className="w-64 border-r border-white/10 flex flex-col">
-        <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-white/10">
-          {repo}
-        </div>
-        <FileListPanel files={files} />
+    <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
+      <div className="px-3 py-1.5 text-xs text-gray-500 border-b border-white/10 font-mono">
+        {repo}
       </div>
-
-      {/* Main area — placeholder for future panels */}
-      <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
-        Select a file
+      <div className="flex-1 overflow-hidden">
+        <PanelGrid panels={[
+          { id: "files", content: <FileListPanel />, defaultSize: 20, minSize: 12 },
+          { id: "main", content: (
+            <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+              Select a file
+            </div>
+          )},
+        ]} />
       </div>
     </div>
   );

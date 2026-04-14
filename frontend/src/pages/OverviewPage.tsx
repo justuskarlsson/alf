@@ -1,31 +1,30 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useRelay } from "../lib/RelayProvider";
-import { useRepoStore } from "../store/repoStore";
+import { useRelay } from "../core/RelayProvider";
+import { useOnConnect } from "../core/useOnConnect";
+import { useReposStore } from "../modules/repos/store";
 
 export function OverviewPage() {
-  const { request, isConnected } = useRelay();
-  const { repos, setRepos } = useRepoStore();
+  const { request } = useRelay();
+  const { repos, setRepos } = useReposStore();
 
-  useEffect(() => {
-    if (!isConnected) return;
+  useOnConnect(() => {
     request<{ repos: string[] }>({ type: "repos/list" })
-      .then((res) => setRepos(res.repos))
+      .then(res => setRepos(res.repos))
       .catch(console.error);
-  }, [isConnected]);
+  });
 
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-6">Repos</h1>
       {repos.length === 0 ? (
-        <p className="text-gray-400">{isConnected ? "No repos found." : "Connecting…"}</p>
+        <p className="text-gray-500">No repos found.</p>
       ) : (
         <ul className="space-y-1">
-          {repos.map((repo) => (
+          {repos.map(repo => (
             <li key={repo}>
               <Link
                 to={`/${repo}`}
-                className="text-blue-400 hover:text-blue-300 hover:underline font-mono"
+                className="font-mono text-blue-400 hover:text-blue-300 hover:underline"
               >
                 {repo}
               </Link>
