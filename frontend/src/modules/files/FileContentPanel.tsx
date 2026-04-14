@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { codeToHtml } from "shiki";
 import { Panel, EmptyState } from "../../panels/Panel";
 import { useFilesStore } from "./store";
@@ -19,10 +20,10 @@ function detectLang(filePath: string): string {
 // Parent (FilesPanel) uses key={contentKey} to force re-mount when file + content
 // are both ready, so useEffect([]) fires once with correct content available.
 export function FileContentPanel() {
-  const { fileContent, selectedFile } = useFilesStore(s => ({
+  const { fileContent, selectedFile } = useFilesStore(useShallow(s => ({
     fileContent: s.fileContent,
     selectedFile: s.selectedFile,
-  }));
+  })));
   const [html, setHtml] = useState<string>("");
 
   useEffect(() => {

@@ -4,17 +4,30 @@
 
 /* ---------------------------------------------------------------------------
    Theme variables — single source of truth for the dark UI palette.
-   Reference these in CSS; use the `alf-*` Tailwind colors in JSX.
+
+   Two levels:
+   1. Channel vars (--alf-*-ch): raw "R G B" triplets.
+      Used in Tailwind via `rgb(var(...) / <alpha-value>)` so opacity modifiers
+      work: bg-alf-bg/80, border-alf-white/20, etc.
+
+   2. Semantic tokens (--alf-surface, --alf-border, --alf-muted):
+      Pre-computed rgb() values for specific opacities.
+      Used directly in this CSS file and as fixed Tailwind colors
+      (no opacity modifier support needed for these).
    --------------------------------------------------------------------------- */
 :root {
-  --alf-bg:           theme('colors.gray.900');   /* page / panel background  */
-  --alf-surface:      rgba(255,255,255,0.05);      /* hover surface            */
-  --alf-border:       rgba(255,255,255,0.10);      /* dividers, borders        */
-  --alf-muted:        rgba(255,255,255,0.12);      /* scrollbar thumb, subdued */
-  --alf-muted-hover:  rgba(255,255,255,0.22);      /* scrollbar thumb hover    */
+  /* 1. Channel vars */
+  --alf-bg-ch:    17 24 39;     /* gray-900 */
+  --alf-white-ch: 255 255 255;
+
+  /* 2. Semantic tokens (derived from channels) */
+  --alf-surface:    rgb(var(--alf-white-ch) / 0.05);   /* hover surface   */
+  --alf-border:     rgb(var(--alf-white-ch) / 0.10);   /* dividers        */
+  --alf-muted:      rgb(var(--alf-white-ch) / 0.12);   /* scrollbar thumb */
+  --alf-muted-hover:rgb(var(--alf-white-ch) / 0.22);   /* scrollbar hover */
 }
 
-/* Subtle scrollbars derived from theme variables */
+/* Subtle scrollbars derived from semantic tokens */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--alf-muted) transparent;

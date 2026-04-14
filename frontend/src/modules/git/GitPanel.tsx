@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { useOnConnect } from "../../core/useOnConnect";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
@@ -84,7 +85,7 @@ function GitSidebar({ repo }: { repo: string }) {
 
 export function GitPanel({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const { setWorktrees, setDiff } = useGitStore(s => ({ setWorktrees: s.setWorktrees, setDiff: s.setDiff }));
+  const { setWorktrees, setDiff } = useGitStore(useShallow(s => ({ setWorktrees: s.setWorktrees, setDiff: s.setDiff })));
 
   useOnConnect(() => {
     setDiff(null);

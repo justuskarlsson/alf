@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../core/RelayProvider";
 import { useOnConnect } from "../core/useOnConnect";
 import { useFilesStore, type FileEntry } from "../modules/files/store";
@@ -22,12 +23,12 @@ interface Props {
 // key={repo} and force a full re-mount on repo change — avoiding useEffect deps.
 export function RepoPage({ repo }: Props) {
   const { request } = useRelay();
-  const { setRepo, setFiles, setSelectedFile, setFileContent } = useFilesStore(s => ({
+  const { setRepo, setFiles, setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
     setRepo: s.setRepo,
     setFiles: s.setFiles,
     setSelectedFile: s.setSelectedFile,
     setFileContent: s.setFileContent,
-  }));
+  })));
   const [view, setView] = useState<View>("files");
 
   useOnConnect(() => {

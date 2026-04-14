@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useShallow } from "zustand/react/shallow";
 import type { TicketFull } from "@alf/types";
 import { useRelay } from "../../core/RelayProvider";
 import { useOnConnect } from "../../core/useOnConnect";
@@ -12,11 +13,11 @@ import { useTicketsStore, type TicketMeta } from "./store";
 
 function TicketList({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const { tickets, selectedTicket, setSelectedTicket } = useTicketsStore(s => ({
+  const { tickets, selectedTicket, setSelectedTicket } = useTicketsStore(useShallow(s => ({
     tickets: s.tickets,
     selectedTicket: s.selectedTicket,
     setSelectedTicket: s.setSelectedTicket,
-  }));
+  })));
 
   function openTicket(meta: TicketMeta) {
     request<{ ticket: TicketFull }>({ type: "tickets/get", repo, id: meta.id })

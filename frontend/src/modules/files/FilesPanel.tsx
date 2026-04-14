@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Tree, type NodeRendererProps } from "react-arborist";
+import { useShallow } from "zustand/react/shallow";
 import type { FilesGetResponse } from "@alf/types";
 import { useRelay } from "../../core/RelayProvider";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
@@ -40,11 +41,11 @@ function buildTree(files: FileEntry[]): TreeNode[] {
 
 function useOpenFile() {
   const { request } = useRelay();
-  const { repo, setSelectedFile, setFileContent } = useFilesStore(s => ({
+  const { repo, setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
     repo: s.repo,
     setSelectedFile: s.setSelectedFile,
     setFileContent: s.setFileContent,
-  }));
+  })));
 
   return (filePath: string) => {
     if (!repo) return;
@@ -62,11 +63,11 @@ function useOpenFile() {
 
 function StarredSection() {
   const openFile = useOpenFile();
-  const { files, starred, unstar } = useFilesStore(s => ({
+  const { files, starred, unstar } = useFilesStore(useShallow(s => ({
     files: s.files,
     starred: s.starred,
     unstar: s.unstar,
-  }));
+  })));
 
   const starredEntries = files.filter(f => starred.includes(f.path));
   if (starredEntries.length === 0) return null;
@@ -102,12 +103,12 @@ function StarredSection() {
 
 function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const openFile = useOpenFile();
-  const { starred, star, unstar, selectedFile } = useFilesStore(s => ({
+  const { starred, star, unstar, selectedFile } = useFilesStore(useShallow(s => ({
     starred: s.starred,
     star: s.star,
     unstar: s.unstar,
     selectedFile: s.selectedFile,
-  }));
+  })));
   const isStarred = starred.includes(node.id);
   const isSelected = selectedFile === node.id;
 
