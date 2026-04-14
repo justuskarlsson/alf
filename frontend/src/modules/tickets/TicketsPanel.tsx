@@ -7,10 +7,6 @@ import { useOnConnect } from "../../core/useOnConnect";
 import { Panel, SidebarLayout, EmptyState } from "../../panels/Panel";
 import { useTicketsStore, type TicketMeta } from "./store";
 
-// ---------------------------------------------------------------------------
-// Ticket list
-// ---------------------------------------------------------------------------
-
 function TicketList({ repo }: { repo: string }) {
   const { request } = useRelay();
   const { tickets, selectedTicket, setSelectedTicket } = useTicketsStore(useShallow(s => ({
@@ -25,31 +21,31 @@ function TicketList({ repo }: { repo: string }) {
       .catch(console.error);
   }
 
-  if (tickets.length === 0) return <EmptyState message="No tickets found." />;
+  if (tickets.length === 0) return <EmptyState message="No tickets." />;
 
   return (
     <Panel>
       <div className="flex-1 overflow-auto">
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-alf-muted">
           {tickets.map(t => (
             <div
               key={t.id}
-              className={`px-3 py-2 cursor-pointer select-none hover:bg-white/5
-                ${selectedTicket?.id === t.id ? "bg-white/10" : ""}`}
+              className={`px-3 py-2 cursor-pointer select-none transition-colors
+                ${selectedTicket?.id === t.id ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
               onClick={() => openTicket(t)}
             >
-              <div className="font-mono text-sm text-gray-200 truncate">{t.title}</div>
+              <div className="font-mono text-sm text-slate-200 truncate">{t.title}</div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span className="font-mono text-xs text-gray-600">{t.id}</span>
+                <span className="font-mono text-xs text-slate-600">{t.id}</span>
                 {t.status && (
                   <span className={`text-xs font-mono
-                    ${t.status === "open" ? "text-green-500/70" : "text-gray-500"}`}>
+                    ${t.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}>
                     {t.status}
                   </span>
                 )}
                 {t.epic && <span className="text-xs text-purple-400/60 font-mono">{t.epic}</span>}
                 {t.tags?.map(tag => (
-                  <span key={tag} className="text-xs text-blue-400/50 font-mono">{tag}</span>
+                  <span key={tag} className="text-xs text-sky-400/50 font-mono">{tag}</span>
                 ))}
               </div>
             </div>
@@ -60,10 +56,6 @@ function TicketList({ repo }: { repo: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Ticket detail
-// ---------------------------------------------------------------------------
-
 function TicketDetail() {
   const selectedTicket = useTicketsStore(s => s.selectedTicket);
 
@@ -71,13 +63,13 @@ function TicketDetail() {
 
   return (
     <Panel>
-      <div className="px-3 py-2 border-b border-gray-700 shrink-0">
-        <div className="font-mono text-sm text-gray-100">{selectedTicket.title}</div>
+      <div className="px-3 py-2 border-b border-alf-border shrink-0 bg-alf-canvas">
+        <div className="font-mono text-sm text-slate-100">{selectedTicket.title}</div>
         <div className="flex gap-2 mt-1 flex-wrap">
-          <span className="font-mono text-xs text-gray-600">{selectedTicket.id}</span>
+          <span className="font-mono text-xs text-slate-600">{selectedTicket.id}</span>
           {selectedTicket.status && (
             <span className={`text-xs font-mono
-              ${selectedTicket.status === "open" ? "text-green-500/70" : "text-gray-500"}`}>
+              ${selectedTicket.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}>
               {selectedTicket.status}
             </span>
           )}
@@ -85,7 +77,7 @@ function TicketDetail() {
             <span className="text-xs text-purple-400/60 font-mono">{selectedTicket.epic}</span>
           )}
           {selectedTicket.tags?.map(tag => (
-            <span key={tag} className="text-xs text-blue-400/50 font-mono">{tag}</span>
+            <span key={tag} className="text-xs text-sky-400/50 font-mono">{tag}</span>
           ))}
         </div>
       </div>
@@ -97,10 +89,6 @@ function TicketDetail() {
     </Panel>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Panel
-// ---------------------------------------------------------------------------
 
 export function TicketsPanel({ repo }: { repo: string }) {
   const { request } = useRelay();

@@ -4,10 +4,6 @@ import { useOnConnect } from "../../core/useOnConnect";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { useGitStore, type Worktree } from "./store";
 
-// ---------------------------------------------------------------------------
-// Diff view — colored line-by-line rendering
-// ---------------------------------------------------------------------------
-
 function DiffView() {
   const diff = useGitStore(s => s.diff);
 
@@ -22,11 +18,11 @@ function DiffView() {
             <div
               key={i}
               className={
-                line.startsWith("+") && !line.startsWith("+++") ? "text-green-400" :
+                line.startsWith("+") && !line.startsWith("+++") ? "text-emerald-400/90" :
                 line.startsWith("-") && !line.startsWith("---") ? "text-red-400/80" :
-                line.startsWith("@@") ? "text-blue-400/80" :
-                line.startsWith("diff ") || line.startsWith("index ") ? "text-gray-500" :
-                "text-gray-300"
+                line.startsWith("@@") ? "text-sky-400/80" :
+                line.startsWith("diff ") || line.startsWith("index ") ? "text-slate-600" :
+                "text-slate-400"
               }
             >
               {line || "\u00a0"}
@@ -38,10 +34,6 @@ function DiffView() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Sidebar: Diffs + Worktrees
-// ---------------------------------------------------------------------------
-
 function GitSidebar({ repo }: { repo: string }) {
   const { request } = useRelay();
   const setDiff = useGitStore(s => s.setDiff);
@@ -51,7 +43,7 @@ function GitSidebar({ repo }: { repo: string }) {
     <Panel>
       <CollapsibleSection title="Diffs">
         <div
-          className="px-3 py-1.5 cursor-default select-none hover:bg-alf-surface font-mono text-xs text-gray-300"
+          className="px-3 py-1.5 cursor-pointer select-none hover:bg-alf-surface/60 font-mono text-xs text-slate-400 transition-colors"
           onClick={() => {
             setDiff(null);
             request<{ diff: string }>({ type: "git/diff", repo })
@@ -64,12 +56,12 @@ function GitSidebar({ repo }: { repo: string }) {
       </CollapsibleSection>
       <CollapsibleSection title="Worktrees">
         {worktrees.length === 0
-          ? <p className="px-3 py-2 text-gray-600 text-xs font-mono">No worktrees</p>
-          : <div className="divide-y divide-white/5">
+          ? <p className="px-3 py-2 text-slate-600 text-xs font-mono">No worktrees</p>
+          : <div className="divide-y divide-alf-muted">
               {worktrees.map((wt: Worktree) => (
-                <div key={wt.path} className="px-3 py-2">
-                  <div className="font-mono text-xs text-gray-300 truncate">{wt.branch || "(detached)"}</div>
-                  <div className="font-mono text-xs text-gray-600 truncate">{wt.path}</div>
+                <div key={wt.path} className="px-3 py-2 hover:bg-alf-surface/60 cursor-default">
+                  <div className="font-mono text-xs text-slate-300 truncate">{wt.branch || "(detached)"}</div>
+                  <div className="font-mono text-xs text-slate-600 truncate">{wt.path}</div>
                 </div>
               ))}
             </div>
@@ -78,10 +70,6 @@ function GitSidebar({ repo }: { repo: string }) {
     </Panel>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Panel
-// ---------------------------------------------------------------------------
 
 export function GitPanel({ repo }: { repo: string }) {
   const { request } = useRelay();

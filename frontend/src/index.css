@@ -3,57 +3,28 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Theme variables — single source of truth for the dark UI palette.
-
-   Two levels:
-   1. Channel vars (--alf-*-ch): raw "R G B" triplets.
-      Used in Tailwind via `rgb(var(...) / <alpha-value>)` so opacity modifiers
-      work: bg-alf-bg/80, border-alf-white/20, etc.
-
-   2. Semantic tokens (--alf-surface, --alf-border, --alf-muted):
-      Pre-computed rgb() values for specific opacities.
-      Used directly in this CSS file and as fixed Tailwind colors
-      (no opacity modifier support needed for these).
+   GitHub dark palette — matches shiki github-dark (#0d1117 base).
+   All semantic colors live in tailwind.config.ts as alf-* custom colors.
    --------------------------------------------------------------------------- */
-:root {
-  /* 1. Channel vars */
-  --alf-bg-ch:    17 24 39;     /* gray-900 */
-  --alf-white-ch: 255 255 255;
-
-  /* 2. Semantic tokens — use rgba() for broad browser compat */
-  --alf-surface:     rgba(255, 255, 255, 0.06);  /* hover surface   */
-  --alf-border:      #2d3748;                    /* gray-700-ish, visible on dark */
-  --alf-muted:       rgba(255, 255, 255, 0.15);  /* scrollbar thumb */
-  --alf-muted-hover: rgba(255, 255, 255, 0.28);  /* scrollbar hover */
-}
-
-/* Force dark base — prevents white flash and panel bleed-through */
 html, body, #root {
-  background-color: #111827;
-  color: #f3f4f6;
+  background-color: #0d1117;
+  color: #e6edf3;
   height: 100%;
 }
 
-/* Subtle scrollbars derived from semantic tokens */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--alf-muted) transparent;
-}
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #30363d transparent; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background-color: var(--alf-muted);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--alf-muted-hover);
-}
+::-webkit-scrollbar-thumb { background-color: #30363d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background-color: #484f58; }
 
-/* Strip shiki inline background so our page background shows through */
+/* Shiki: strip wrapper background so the panel bg shows through cleanly */
 .alf-shiki pre,
 .alf-shiki code {
   background: transparent !important;
   padding: 1rem;
   font-size: 0.8125rem;
   line-height: 1.6;
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
 }

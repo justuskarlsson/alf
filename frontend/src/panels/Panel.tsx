@@ -6,17 +6,9 @@ import {
   PanelResizeHandle,
 } from "react-resizable-panels";
 
-// ---------------------------------------------------------------------------
-// Panel — standard full-height flex-col container for any panel content.
-// ---------------------------------------------------------------------------
-
 export function Panel({ children }: { children: ReactNode }) {
-  return <div className="h-full flex flex-col overflow-hidden bg-gray-900">{children}</div>;
+  return <div className="h-full flex flex-col overflow-hidden bg-alf-bg">{children}</div>;
 }
-
-// ---------------------------------------------------------------------------
-// SidebarLayout — two-pane horizontal split: resizable sidebar + main area.
-// ---------------------------------------------------------------------------
 
 interface SidebarLayoutProps {
   sidebar: ReactNode;
@@ -31,17 +23,13 @@ export function SidebarLayout({ sidebar, main, defaultSize = 25, minSize = 15 }:
       <ResizablePanel defaultSize={defaultSize} minSize={minSize}>
         {sidebar}
       </ResizablePanel>
-      <PanelResizeHandle className="w-0.5 bg-gray-700 hover:bg-gray-500 transition-colors cursor-col-resize" />
+      <PanelResizeHandle className="w-px bg-alf-border hover:bg-slate-500 transition-colors cursor-col-resize" />
       <ResizablePanel>
         {main}
       </ResizablePanel>
     </PanelGroup>
   );
 }
-
-// ---------------------------------------------------------------------------
-// CollapsibleSection — sidebar row with collapsible header + content.
-// ---------------------------------------------------------------------------
 
 interface CollapsibleSectionProps {
   title: string;
@@ -59,16 +47,18 @@ export function CollapsibleSection({
   const [open, setOpen] = useState(defaultOpen);
 
   const wrapperClass = fill
-    ? `border-b border-gray-700 flex flex-col ${open ? "flex-1 min-h-0" : "shrink-0"}`
-    : "border-b border-gray-700 shrink-0";
+    ? `border-b border-alf-muted flex flex-col ${open ? "flex-1 min-h-0" : "shrink-0"}`
+    : "border-b border-alf-muted shrink-0";
 
   return (
     <div className={wrapperClass}>
       <button
-        className="w-full flex items-center gap-1 px-2 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider hover:text-gray-300 hover:bg-white/5 shrink-0"
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-mono text-slate-500
+                   uppercase tracking-widest hover:text-slate-300 hover:bg-alf-surface shrink-0
+                   transition-colors"
         onClick={() => setOpen(o => !o)}
       >
-        <span className="w-3 text-center">{open ? "▾" : "▸"}</span>
+        <span className="w-3 text-center opacity-60">{open ? "▾" : "▸"}</span>
         {title}
       </button>
       {open && (
@@ -80,13 +70,9 @@ export function CollapsibleSection({
   );
 }
 
-// ---------------------------------------------------------------------------
-// EmptyState — centred placeholder text.
-// ---------------------------------------------------------------------------
-
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="h-full flex items-center justify-center text-gray-600 text-sm font-mono">
+    <div className="h-full flex items-center justify-center text-slate-600 text-xs font-mono">
       {message}
     </div>
   );

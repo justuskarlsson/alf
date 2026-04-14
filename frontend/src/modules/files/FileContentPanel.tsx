@@ -30,7 +30,7 @@ export function FileContentPanel() {
     if (!fileContent || !selectedFile) return;
     codeToHtml(fileContent, {
       lang: detectLang(selectedFile),
-      theme: "github-dark-dimmed",
+      theme: "github-dark",
     }).then(setHtml);
   }, []);
 
@@ -39,13 +39,13 @@ export function FileContentPanel() {
 
   return (
     <Panel>
-      <div className="px-3 py-1 text-xs text-gray-500 font-mono border-b border-alf-border shrink-0">
+      <div className="px-3 py-1.5 text-xs text-slate-500 font-mono border-b border-alf-border shrink-0 bg-alf-canvas">
         {selectedFile}
       </div>
       <div className="flex-1 overflow-auto">
         {html
-          ? <div className="alf-shiki text-sm" dangerouslySetInnerHTML={{ __html: html }} />
-          : <pre className="p-4 font-mono text-sm text-gray-300 whitespace-pre-wrap">{fileContent}</pre>
+          ? <div className="alf-shiki" dangerouslySetInnerHTML={{ __html: html }} />
+          : <pre className="p-4 font-mono text-sm text-slate-300 whitespace-pre-wrap">{fileContent}</pre>
         }
       </div>
     </Panel>

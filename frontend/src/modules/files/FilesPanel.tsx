@@ -7,10 +7,6 @@ import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../pane
 import { FileContentPanel } from "./FileContentPanel";
 import { useFilesStore, type FileEntry } from "./store";
 
-// ---------------------------------------------------------------------------
-// Flat list → tree conversion
-// ---------------------------------------------------------------------------
-
 interface TreeNode {
   id: string;
   name: string;
@@ -35,10 +31,6 @@ function buildTree(files: FileEntry[]): TreeNode[] {
   return roots;
 }
 
-// ---------------------------------------------------------------------------
-// Shared file-open helper — used by both sidebar sections
-// ---------------------------------------------------------------------------
-
 function useOpenFile() {
   const { request } = useRelay();
   const { repo, setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
@@ -57,10 +49,6 @@ function useOpenFile() {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Starred section
-// ---------------------------------------------------------------------------
-
 function StarredSection() {
   const openFile = useOpenFile();
   const { files, starred, unstar } = useFilesStore(useShallow(s => ({
@@ -77,7 +65,7 @@ function StarredSection() {
       {starredEntries.map(f => (
         <div
           key={f.path}
-          className="flex items-start gap-1.5 px-2 py-0.5 hover:bg-alf-surface cursor-default select-none"
+          className="flex items-start gap-1.5 px-2 py-0.5 hover:bg-alf-surface cursor-pointer select-none"
           onClick={() => !f.isDir && openFile(f.path)}
         >
           <button
@@ -86,9 +74,9 @@ function StarredSection() {
             title="Unstar"
           >★</button>
           <div className="flex flex-col min-w-0">
-            <span className="font-mono text-sm text-gray-300 truncate">{f.name}</span>
+            <span className="font-mono text-sm text-slate-300 truncate">{f.name}</span>
             {f.path !== f.name && (
-              <span className="font-mono text-xs text-gray-600 truncate">{f.path}</span>
+              <span className="font-mono text-xs text-slate-600 truncate">{f.path}</span>
             )}
           </div>
         </div>
@@ -96,10 +84,6 @@ function StarredSection() {
     </CollapsibleSection>
   );
 }
-
-// ---------------------------------------------------------------------------
-// File tree node
-// ---------------------------------------------------------------------------
 
 function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const openFile = useOpenFile();
@@ -112,49 +96,39 @@ function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const isStarred = starred.includes(node.id);
   const isSelected = selectedFile === node.id;
 
-  function onRowClick() {
-    if (node.isInternal) node.toggle();
-    else openFile(node.id);
-  }
-
   return (
     <div
       ref={dragHandle}
       style={style}
-      className={`flex items-center gap-1 px-1 rounded cursor-default select-none group
-        ${isSelected ? "bg-white/10" : "hover:bg-alf-surface"}`}
-      onClick={onRowClick}
+      className={`flex items-center gap-1 px-1 rounded cursor-pointer select-none group
+        ${isSelected ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
+      onClick={() => node.isInternal ? node.toggle() : openFile(node.id)}
     >
       <button
         className={`shrink-0 text-xs w-3.5 text-center transition-colors
           ${isStarred
             ? "text-yellow-500/70 hover:text-yellow-400"
-            : "text-transparent group-hover:text-gray-600 hover:!text-gray-400"}`}
+            : "text-transparent group-hover:text-slate-600 hover:!text-slate-400"}`}
         onClick={(e) => { e.stopPropagation(); isStarred ? unstar(node.id) : star(node.id); }}
         title={isStarred ? "Unstar" : "Star"}
       >
         {isStarred ? "★" : "☆"}
       </button>
-      <span className="text-gray-600 text-xs w-3 shrink-0 text-center">
-        {node.isLeaf ? "·" : node.isOpen ? "▾" : "▸"}
+      <span className="text-slate-600 text-xs w-3 shrink-0 text-center">
+        {node.isLeaf ? "" : node.isOpen ? "▾" : "▸"}
       </span>
-      <span className={`font-mono text-sm truncate ${node.isLeaf ? "text-gray-400" : "text-gray-200"}`}>
+      <span className={`font-mono text-sm truncate ${node.isLeaf ? "text-slate-400" : "text-slate-200"}`}>
         {node.data.name}
       </span>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Sidebar — starred section + file tree
-// ---------------------------------------------------------------------------
-
 function FilesSidebar() {
   const files = useFilesStore(s => s.files);
   const containerRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(400);
 
-  // Measure tree container for react-arborist virtualisation
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -175,8 +149,8 @@ function FilesSidebar() {
             openByDefault={false}
             width="100%"
             height={height}
-            indent={16}
-            rowHeight={26}
+            indent={14}
+            rowHeight={24}
           >
             {FileNode}
           </Tree>
@@ -186,21 +160,15 @@ function FilesSidebar() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// FilesPanel — self-contained files experience: sidebar + content view.
-// Import this in RepoPage; do not wire FileListPanel + FileContentPanel manually.
-// ---------------------------------------------------------------------------
-
 export function FilesPanel() {
   const selectedFile = useFilesStore(s => s.selectedFile);
   const hasContent = useFilesStore(s => s.fileContent !== null);
-  // key forces FileContentPanel re-mount once content is ready → triggers shiki
   const contentKey = selectedFile ? (hasContent ? selectedFile : `${selectedFile}:loading`) : "empty";
 
   return (
     <SidebarLayout
-      defaultSize={22}
-      minSize={14}
+      defaultSize={40}
+      minSize={20}
       sidebar={<FilesSidebar />}
       main={<FileContentPanel key={contentKey} />}
     />
