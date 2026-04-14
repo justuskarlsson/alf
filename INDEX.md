@@ -42,10 +42,14 @@ Here we want to lay the foundation for robust infra and testing:
 
 
 ### MVP 2
+- Scrollbar colors that blend in nicely to rest of ui.
 - Expand FileList module to also have a content viewer.
     - For text files, use syntax highlighting lib.
     - New endpoint, files/get . Return file contents (raw base64? maybe if non-text file). With this new endpoint to files module, maybe have all files endpoint together in a class? So then we can use non-experimental function decorators since it belongs to a class. Also, the class tells that "ok all of these paths are prefixed with files/". 
+- Starring functionality for FileList. Read frontend/pseudo.tsx for layout instructions.
 - Tickets module.
-    - Possibly multiple front-end panels. But lets start with "tickets-list". Just a list of tickets. 
+    - Possibly multiple front-end panels. But lets start with "tickets-list". Just a list of tickets with a "content window" that renders the selected ticket. Read frontend/pseudo.tsx
     - For dev, we want controllable repos. So maybe set repo path to ~/repos/alf-test-repos/ . And populate with one or two repos with some tickets.
     - How to handle tickets? Should we use .orc/tickets? Maybe, but lets rebrand to .alf/tickets.
+- Infra: Fix backend logs. Right now, I dont see the dispatches and requests done from front-end. This is the key information. 
+- git panel. See frontend/pseudo.tsx.

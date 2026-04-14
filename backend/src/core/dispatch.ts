@@ -44,9 +44,10 @@ export function dispatch(raw: string, send: (msg: object) => void) {
 
   const handler = handlers.get(type ?? "");
   if (!handler) {
-    log.warn("Unknown message type", { type, connectionId });
+    log.warn("Unknown type", { type, connectionId });
     return;
   }
 
+  log.info("→", { type, connectionId, requestId });
   handler(msg, (response) => send({ ...response, connectionId, requestId }));
 }

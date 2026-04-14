@@ -72,4 +72,29 @@ export class FilesModule {
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     reply({ type: "files/list", files: listFiles(repo) });
   }
+
+  @handle("files/get")
+  static get(msg: Record<string, unknown>, reply: Reply) {
+    const repo = msg.repo as string | undefined;
+    const filePath = msg.path as string | undefined;
+    if (!repo || !filePath) { reply({ type: "error", error: "Missing repo or path" }); return; }
+
+    const repoRoot = path.join(REPOS_ROOT, repo);
+    const fullPath = path.resolve(repoRoot, filePath);
+    if (!fullPath.startsWith(repoRoot + path.sep) && fullPath !== repoRoot) {
+      reply({ type: "error", error: "Invalid path" }); return;
+    }
+
+    try {
+      const content = fs.readFileSync(fullPath, "utf8");
+      reply({ type: "files/get", content, path: filePath });
+    } catch {
+      try {
+        const content = fs.readFileSync(fullPath).toString("base64");
+        reply({ type: "files/get", content, isBinary: true, path: filePath });
+      } catch {
+        reply({ type: "error", error: "Cannot read file" });
+      }
+    }
+  }
 }

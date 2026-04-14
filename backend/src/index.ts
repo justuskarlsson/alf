@@ -9,6 +9,8 @@ import { createLogger } from "./core/logger.js";
 // Register all module handlers (side-effect imports)
 import "./modules/repos/index.js";
 import "./modules/files/index.js";
+import "./modules/tickets/index.js";
+import "./modules/git/index.js";
 
 const log = createLogger("backend");
 
