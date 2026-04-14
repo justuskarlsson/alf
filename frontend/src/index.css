@@ -20,11 +20,18 @@
   --alf-bg-ch:    17 24 39;     /* gray-900 */
   --alf-white-ch: 255 255 255;
 
-  /* 2. Semantic tokens (derived from channels) */
-  --alf-surface:    rgb(var(--alf-white-ch) / 0.05);   /* hover surface   */
-  --alf-border:     rgb(var(--alf-white-ch) / 0.10);   /* dividers        */
-  --alf-muted:      rgb(var(--alf-white-ch) / 0.12);   /* scrollbar thumb */
-  --alf-muted-hover:rgb(var(--alf-white-ch) / 0.22);   /* scrollbar hover */
+  /* 2. Semantic tokens — use rgba() for broad browser compat */
+  --alf-surface:     rgba(255, 255, 255, 0.06);  /* hover surface   */
+  --alf-border:      #2d3748;                    /* gray-700-ish, visible on dark */
+  --alf-muted:       rgba(255, 255, 255, 0.15);  /* scrollbar thumb */
+  --alf-muted-hover: rgba(255, 255, 255, 0.28);  /* scrollbar hover */
+}
+
+/* Force dark base — prevents white flash and panel bleed-through */
+html, body, #root {
+  background-color: #111827;
+  color: #f3f4f6;
+  height: 100%;
 }
 
 /* Subtle scrollbars derived from semantic tokens */
