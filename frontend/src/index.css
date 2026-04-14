@@ -2,19 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Subtle scrollbars to match dark UI */
+/* ---------------------------------------------------------------------------
+   Theme variables — single source of truth for the dark UI palette.
+   Reference these in CSS; use the `alf-*` Tailwind colors in JSX.
+   --------------------------------------------------------------------------- */
+:root {
+  --alf-bg:           theme('colors.gray.900');   /* page / panel background  */
+  --alf-surface:      rgba(255,255,255,0.05);      /* hover surface            */
+  --alf-border:       rgba(255,255,255,0.10);      /* dividers, borders        */
+  --alf-muted:        rgba(255,255,255,0.12);      /* scrollbar thumb, subdued */
+  --alf-muted-hover:  rgba(255,255,255,0.22);      /* scrollbar thumb hover    */
+}
+
+/* Subtle scrollbars derived from theme variables */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  scrollbar-color: var(--alf-muted) transparent;
 }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--alf-muted);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.22);
+  background-color: var(--alf-muted-hover);
 }
 
 /* Strip shiki inline background so our page background shows through */

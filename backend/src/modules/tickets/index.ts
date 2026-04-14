@@ -1,22 +1,10 @@
 import fs from "fs";
 import path from "path";
+import type { TicketMeta, TicketFull } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
 const TICKETS_DIR = ".alf/tickets";
-
-interface TicketMeta {
-  id: string;
-  title: string;
-  tags?: string[];
-  epic?: string;
-  status?: string;
-  created?: string;
-}
-
-interface TicketFull extends TicketMeta {
-  content: string;
-}
 
 function parseFrontmatter(raw: string): { meta: Record<string, unknown>; body: string } {
   if (!raw.startsWith("---")) return { meta: {}, body: raw };

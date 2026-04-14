@@ -1,14 +1,8 @@
 import { create } from "zustand";
+import type { FileEntry } from "@alf/types";
+import { storage } from "../../core/storage";
 
-export interface FileEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-}
-
-function loadStarred(repo: string): string[] {
-  try { return JSON.parse(localStorage.getItem(`alf:starred:${repo}`) ?? "[]"); } catch { return []; }
-}
+export type { FileEntry };
 
 interface FilesStore {
   repo: string | null;
@@ -26,7 +20,7 @@ interface FilesStore {
 
 export const useFilesStore = create<FilesStore>((set) => ({
   repo: null,
-  setRepo: (repo) => set({ repo, starred: loadStarred(repo) }),
+  setRepo: (repo) => set({ repo, starred: storage.get<string[]>(`starred:${repo}`) ?? [] }),
   files: [],
   setFiles: (files) => set({ files }),
   selectedFile: null,
@@ -37,13 +31,13 @@ export const useFilesStore = create<FilesStore>((set) => ({
   star: (filePath) => set((s) => {
     if (!s.repo || s.starred.includes(filePath)) return s;
     const starred = [...s.starred, filePath];
-    localStorage.setItem(`alf:starred:${s.repo}`, JSON.stringify(starred));
+    storage.set(`starred:${s.repo}`, starred);
     return { starred };
   }),
   unstar: (filePath) => set((s) => {
     if (!s.repo) return s;
     const starred = s.starred.filter(p => p !== filePath);
-    localStorage.setItem(`alf:starred:${s.repo}`, JSON.stringify(starred));
+    storage.set(`starred:${s.repo}`, starred);
     return { starred };
   }),
 }));

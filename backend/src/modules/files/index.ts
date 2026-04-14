@@ -1,15 +1,10 @@
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import type { FileEntry } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
-
-export interface FileEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-}
 
 // Sorted flat list from git ls-files — respects .gitignore.
 // Reconstructs dir entries from file paths.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { codeToHtml } from "shiki";
+import { Panel, EmptyState } from "../../panels/Panel";
 import { useFilesStore } from "./store";
 
 const EXT_LANG: Record<string, string> = {
@@ -15,8 +16,8 @@ function detectLang(filePath: string): string {
   return EXT_LANG[ext] ?? "text";
 }
 
-// Parent uses key={contentKey} to force re-mount when file + content are both ready.
-// useEffect([]) then runs once with the correct content available.
+// Parent (FilesPanel) uses key={contentKey} to force re-mount when file + content
+// are both ready, so useEffect([]) fires once with correct content available.
 export function FileContentPanel() {
   const { fileContent, selectedFile } = useFilesStore(s => ({
     fileContent: s.fileContent,
@@ -32,30 +33,20 @@ export function FileContentPanel() {
     }).then(setHtml);
   }, []);
 
-  if (!selectedFile) {
-    return (
-      <div className="h-full flex items-center justify-center text-gray-600 text-sm">
-        Select a file
-      </div>
-    );
-  }
-
-  if (fileContent === null) {
-    return <div className="h-full flex items-center justify-center text-gray-600 text-sm">Loading…</div>;
-  }
+  if (!selectedFile) return <EmptyState message="Select a file" />;
+  if (fileContent === null) return <EmptyState message="Loading…" />;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-3 py-1 text-xs text-gray-500 font-mono border-b border-white/10 shrink-0">
+    <Panel>
+      <div className="px-3 py-1 text-xs text-gray-500 font-mono border-b border-alf-border shrink-0">
         {selectedFile}
       </div>
       <div className="flex-1 overflow-auto">
-        {html ? (
-          <div className="alf-shiki text-sm" dangerouslySetInnerHTML={{ __html: html }} />
-        ) : (
-          <pre className="p-4 font-mono text-sm text-gray-300 whitespace-pre-wrap">{fileContent}</pre>
-        )}
+        {html
+          ? <div className="alf-shiki text-sm" dangerouslySetInnerHTML={{ __html: html }} />
+          : <pre className="p-4 font-mono text-sm text-gray-300 whitespace-pre-wrap">{fileContent}</pre>
+        }
       </div>
-    </div>
+    </Panel>
   );
 }

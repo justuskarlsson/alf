@@ -1,17 +1,7 @@
 import { create } from "zustand";
+import type { TicketMeta, TicketFull } from "@alf/types";
 
-export interface TicketMeta {
-  id: string;
-  title: string;
-  tags?: string[];
-  epic?: string;
-  status?: string;
-  created?: string;
-}
-
-export interface TicketFull extends TicketMeta {
-  content: string;
-}
+export type { TicketMeta, TicketFull };
 
 interface TicketsStore {
   tickets: TicketMeta[];

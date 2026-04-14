@@ -1,18 +1,12 @@
 import { execSync } from "child_process";
 import path from "path";
+import type { Worktree } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
 
 function repoPath(repo: string): string {
   return path.join(REPOS_ROOT, repo);
-}
-
-interface Worktree {
-  path: string;
-  head: string;
-  branch: string;
-  bare: boolean;
 }
 
 function parseWorktrees(raw: string): Worktree[] {

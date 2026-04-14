@@ -1,11 +1,7 @@
 import { create } from "zustand";
+import type { Worktree } from "@alf/types";
 
-export interface Worktree {
-  path: string;
-  head: string;
-  branch: string;
-  bare: boolean;
-}
+export type { Worktree };
 
 interface GitStore {
   worktrees: Worktree[];

@@ -4,9 +4,12 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
+    "noEmit": true,
     "experimentalDecorators": true,
-    "outDir": "dist",
-    "rootDir": "src"
+    "baseUrl": ".",
+    "paths": {
+      "@alf/types": ["../shared/types/index.ts"]
+    }
   },
   "include": ["src"]
 }
