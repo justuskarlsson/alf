@@ -1,17 +1,35 @@
 /**
- * Handler registry. Each module registers its type handlers here.
- * dispatch() is called with each raw WS message from a client.
+ * Handler registry + @handle decorator.
+ * dispatch() routes incoming WS messages to registered handlers.
  */
 
-type Handler = (
-  msg: Record<string, unknown>,
-  reply: (response: object) => void
-) => void;
+import { createLogger } from "./logger.js";
+
+const log = createLogger("dispatch");
+
+export type Reply = (response: object) => void;
+export type Handler = (msg: Record<string, unknown>, reply: Reply) => void;
 
 const handlers = new Map<string, Handler>();
 
 export function register(type: string, handler: Handler) {
   handlers.set(type, handler);
+}
+
+/**
+ * Decorator that registers a static class method as a WS message handler.
+ *
+ * @example
+ * class MyModule {
+ *   @handle("my/type")
+ *   static action(msg, reply) { ... }
+ * }
+ */
+export function handle(type: string) {
+  return function (_target: object, _key: string, descriptor: PropertyDescriptor): PropertyDescriptor {
+    register(type, descriptor.value as Handler);
+    return descriptor;
+  };
 }
 
 export function dispatch(raw: string, send: (msg: object) => void) {
@@ -22,11 +40,11 @@ export function dispatch(raw: string, send: (msg: object) => void) {
     type?: string; connectionId?: string; requestId?: string;
   };
 
-  if (!connectionId) return; // relay control messages (client-connected, etc.)
+  if (!connectionId) return; // relay control messages
 
   const handler = handlers.get(type ?? "");
   if (!handler) {
-    console.log(`[dispatch] unknown type: ${type}`);
+    log.warn("Unknown message type", { type, connectionId });
     return;
   }
 

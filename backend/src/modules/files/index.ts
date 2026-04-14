@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { register } from "../../core/dispatch.js";
+import { handle, type Reply } from "../../core/dispatch.js";
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
 
@@ -65,8 +65,11 @@ function listFiles(repo: string, useGit = true): FileEntry[] {
   return listFilesNaive(repoPath);
 }
 
-register("files/list", (msg, reply) => {
-  const repo = msg.repo as string | undefined;
-  if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
-  reply({ type: "files/list", files: listFiles(repo) });
-});
+export class FilesModule {
+  @handle("files/list")
+  static list(msg: Record<string, unknown>, reply: Reply) {
+    const repo = msg.repo as string | undefined;
+    if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
+    reply({ type: "files/list", files: listFiles(repo) });
+  }
+}

@@ -1,6 +1,5 @@
 import fs from "fs";
-import path from "path";
-import { register } from "../../core/dispatch.js";
+import { handle, type Reply } from "../../core/dispatch.js";
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
 
@@ -15,6 +14,9 @@ function listRepos(): string[] {
   }
 }
 
-register("repos/list", (_msg, reply) => {
-  reply({ type: "repos/list", repos: listRepos() });
-});
+export class ReposModule {
+  @handle("repos/list")
+  static list(_msg: Record<string, unknown>, reply: Reply) {
+    reply({ type: "repos/list", repos: listRepos() });
+  }
+}

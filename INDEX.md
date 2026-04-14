@@ -39,3 +39,13 @@ Here we want to lay the foundation for robust infra and testing:
 - in infra/ , need to find a nice way so we can spick up a "dev stack" (frontend, relay and backend) on certain ports. Be able to reload, ensure process quits, and so on. Should be able to run on same machine as "prod stack" is. User services for this? I find, if its just regular processes, a bit hard to keep track of which PIDs actually quit, which ports are used, etc.
 - Keep system prompts, and as much config as possible in infra. 
 - Also logs there.
+
+
+### MVP 2
+- Expand FileList module to also have a content viewer.
+    - For text files, use syntax highlighting lib.
+    - New endpoint, files/get . Return file contents (raw base64? maybe if non-text file). With this new endpoint to files module, maybe have all files endpoint together in a class? So then we can use non-experimental function decorators since it belongs to a class. Also, the class tells that "ok all of these paths are prefixed with files/". 
+- Tickets module.
+    - Possibly multiple front-end panels. But lets start with "tickets-list". Just a list of tickets. 
+    - For dev, we want controllable repos. So maybe set repo path to ~/repos/alf-test-repos/ . And populate with one or two repos with some tickets.
+    - How to handle tickets? Should we use .orc/tickets? Maybe, but lets rebrand to .alf/tickets.
