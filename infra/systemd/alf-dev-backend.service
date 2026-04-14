@@ -8,7 +8,6 @@ Type=simple
 WorkingDirectory=%h/repos/alf/backend
 ExecStart=%h/repos/alf/backend/node_modules/.bin/tsx src/index.ts
 EnvironmentFile=%h/repos/alf/infra/.env.dev
-Environment=RELAY_URL=ws://localhost:3100
 Restart=on-failure
 RestartSec=2
 StandardOutput=journal

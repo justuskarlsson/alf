@@ -42,10 +42,9 @@ function connect() {
     const raw = data.toString();
     let msg: Record<string, unknown>;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (msg.type === "connected") {
-      log.info("Authenticated", { serverName: SERVER_NAME || "(default)" });
-      return;
-    }
+    // Relay system messages — not client requests
+    if (msg.type === "connected") { log.info("Authenticated", { serverName: SERVER_NAME || "(default)" }); return; }
+    if (msg.type === "client-connected" || msg.type === "client-disconnected" || msg.type === "clients-online") return;
     dispatch(raw, send);
   });
 
