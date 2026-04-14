@@ -1,0 +1,6 @@
+[Unit]
+Description=Alf Dev Stack
+Wants=alf-dev-relay.service alf-dev-backend.service alf-dev-frontend.service
+
+[Install]
+WantedBy=default.target
