@@ -4,9 +4,9 @@ import { storage } from "../../core/storage";
 
 export type { FileEntry };
 
+type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
+
 interface FilesStore {
-  repo: string | null;
-  setRepo: (repo: string) => void;
   files: FileEntry[];
   setFiles: (files: FileEntry[]) => void;
   selectedFile: string | null;
@@ -14,13 +14,13 @@ interface FilesStore {
   fileContent: string | null;
   setFileContent: (content: string | null) => void;
   starred: string[];
-  star: (path: string) => void;
-  unstar: (path: string) => void;
+  loadStarred: (repo: string) => void;
+  star: (repo: string, path: string) => void;
+  unstar: (repo: string, path: string) => void;
+  listFiles: (repo: string, request: WsRequest) => void;
 }
 
 export const useFilesStore = create<FilesStore>((set) => ({
-  repo: null,
-  setRepo: (repo) => set({ repo, starred: storage.get<string[]>(`starred:${repo}`) ?? [] }),
   files: [],
   setFiles: (files) => set({ files }),
   selectedFile: null,
@@ -28,16 +28,22 @@ export const useFilesStore = create<FilesStore>((set) => ({
   fileContent: null,
   setFileContent: (content) => set({ fileContent: content }),
   starred: [],
-  star: (filePath) => set((s) => {
-    if (!s.repo || s.starred.includes(filePath)) return s;
+  loadStarred: (repo) => set({ starred: storage.get<string[]>(`starred:${repo}`) ?? [] }),
+  star: (repo, filePath) => set((s) => {
+    if (s.starred.includes(filePath)) return s;
     const starred = [...s.starred, filePath];
-    storage.set(`starred:${s.repo}`, starred);
+    storage.set(`starred:${repo}`, starred);
     return { starred };
   }),
-  unstar: (filePath) => set((s) => {
-    if (!s.repo) return s;
+  unstar: (repo, filePath) => set((s) => {
     const starred = s.starred.filter(p => p !== filePath);
-    storage.set(`starred:${s.repo}`, starred);
+    storage.set(`starred:${repo}`, starred);
     return { starred };
   }),
+  listFiles: (repo, request) => {
+    set({ files: [], selectedFile: null, fileContent: null });
+    request<{ files: FileEntry[] }>({ type: "files/list", repo })
+      .then(res => set({ files: res.files }))
+      .catch(console.error);
+  },
 }));

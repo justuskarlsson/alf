@@ -1,7 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useShallow } from "zustand/react/shallow";
-import type { TicketFull } from "@alf/types";
 import { useRelay } from "../../core/RelayProvider";
 import { useOnConnect } from "../../core/useOnConnect";
 import { Panel, SidebarLayout, EmptyState } from "../../panels/Panel";
@@ -9,17 +8,11 @@ import { useTicketsStore, type TicketMeta } from "./store";
 
 function TicketList({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const { tickets, selectedTicket, setSelectedTicket } = useTicketsStore(useShallow(s => ({
+  const { tickets, selectedTicket, selectTicket } = useTicketsStore(useShallow(s => ({
     tickets: s.tickets,
     selectedTicket: s.selectedTicket,
-    setSelectedTicket: s.setSelectedTicket,
+    selectTicket: s.selectTicket,
   })));
-
-  function openTicket(meta: TicketMeta) {
-    request<{ ticket: TicketFull }>({ type: "tickets/get", repo, id: meta.id })
-      .then(res => setSelectedTicket(res.ticket))
-      .catch(console.error);
-  }
 
   if (tickets.length === 0) return <EmptyState message="No tickets." />;
 
@@ -32,7 +25,7 @@ function TicketList({ repo }: { repo: string }) {
               key={t.id}
               className={`px-3 py-2 cursor-pointer select-none transition-colors
                 ${selectedTicket?.id === t.id ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
-              onClick={() => openTicket(t)}
+              onClick={() => selectTicket(t.id, repo, request)}
             >
               <div className="font-mono text-sm text-slate-200 truncate">{t.title}</div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">

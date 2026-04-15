@@ -3,6 +3,8 @@ import { Tree, type NodeRendererProps } from "react-arborist";
 import { useShallow } from "zustand/react/shallow";
 import type { FilesGetResponse } from "@alf/types";
 import { useRelay } from "../../core/RelayProvider";
+import { useOnConnect } from "../../core/useOnConnect";
+import { useGlobalStore } from "../../core/globalStore";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { FileContentPanel } from "./FileContentPanel";
 import { useFilesStore, type FileEntry } from "./store";
@@ -33,8 +35,8 @@ function buildTree(files: FileEntry[]): TreeNode[] {
 
 function useOpenFile() {
   const { request } = useRelay();
-  const { repo, setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
-    repo: s.repo,
+  const repo = useGlobalStore(s => s.repo);
+  const { setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
     setSelectedFile: s.setSelectedFile,
     setFileContent: s.setFileContent,
   })));
@@ -51,6 +53,7 @@ function useOpenFile() {
 
 function StarredSection() {
   const openFile = useOpenFile();
+  const repo = useGlobalStore(s => s.repo);
   const { files, starred, unstar } = useFilesStore(useShallow(s => ({
     files: s.files,
     starred: s.starred,
@@ -70,7 +73,7 @@ function StarredSection() {
         >
           <button
             className="shrink-0 mt-0.5 text-xs w-3 text-yellow-500/70 hover:text-yellow-400"
-            onClick={(e) => { e.stopPropagation(); unstar(f.path); }}
+            onClick={(e) => { e.stopPropagation(); if (repo) unstar(repo, f.path); }}
             title="Unstar"
           >★</button>
           <div className="flex flex-col min-w-0">
@@ -87,6 +90,7 @@ function StarredSection() {
 
 function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const openFile = useOpenFile();
+  const repo = useGlobalStore(s => s.repo);
   const { starred, star, unstar, selectedFile } = useFilesStore(useShallow(s => ({
     starred: s.starred,
     star: s.star,
@@ -109,7 +113,10 @@ function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           ${isStarred
             ? "text-yellow-500/70 hover:text-yellow-400"
             : "text-transparent group-hover:text-slate-600 hover:!text-slate-400"}`}
-        onClick={(e) => { e.stopPropagation(); isStarred ? unstar(node.id) : star(node.id); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (repo) isStarred ? unstar(repo, node.id) : star(repo, node.id);
+        }}
         title={isStarred ? "Unstar" : "Star"}
       >
         {isStarred ? "★" : "☆"}
@@ -161,9 +168,21 @@ function FilesSidebar() {
 }
 
 export function FilesPanel() {
+  const { request } = useRelay();
+  const repo = useGlobalStore(s => s.repo);
+  const { listFiles, loadStarred } = useFilesStore(useShallow(s => ({
+    listFiles: s.listFiles,
+    loadStarred: s.loadStarred,
+  })));
   const selectedFile = useFilesStore(s => s.selectedFile);
   const hasContent = useFilesStore(s => s.fileContent !== null);
   const contentKey = selectedFile ? (hasContent ? selectedFile : `${selectedFile}:loading`) : "empty";
+
+  useOnConnect(() => {
+    if (!repo) return;
+    loadStarred(repo);
+    listFiles(repo, request);
+  });
 
   return (
     <SidebarLayout

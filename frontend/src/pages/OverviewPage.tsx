@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { useRelay } from "../core/RelayProvider";
 import { useOnConnect } from "../core/useOnConnect";
-import { useReposStore } from "../modules/repos/store";
+import { useGlobalStore } from "../core/globalStore";
 
 export function OverviewPage() {
   const { request } = useRelay();
-  const { repos, setRepos } = useReposStore();
+  const { repos, setRepos } = useGlobalStore();
 
   useOnConnect(() => {
     request<{ repos: string[] }>({ type: "repos/list" })

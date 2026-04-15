@@ -55,7 +55,9 @@ Here we want to lay the foundation for robust infra and testing:
 - git panel. See frontend/pseudo.tsx.
 
 ### MVP 3
-Introduce agents.
+__Major focuses__
+- Introduce agents
+- Test-suite, make use of tests (primarily backend, maybe also front-end but less easy wins).
 
 __Terminology (in abstraction order, first highest level):__
 - Session: A claude code or codex session. A conversation. Consists of ->
