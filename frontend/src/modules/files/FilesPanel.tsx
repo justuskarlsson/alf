@@ -9,46 +9,74 @@ import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../pane
 import { FileContentPanel } from "./FileContentPanel";
 import { useFilesStore, type FileEntry } from "./store";
 
-interface TreeNode {
-  id: string;
-  name: string;
-  isDir: boolean;
-  children?: TreeNode[];
-}
+// ---------------------------------------------------------------------------
+// Top-level export — entry point for this module.
+// ---------------------------------------------------------------------------
 
-function buildTree(files: FileEntry[]): TreeNode[] {
-  const map = new Map<string, TreeNode>();
-  const roots: TreeNode[] = [];
-  for (const f of files) {
-    const node: TreeNode = { id: f.path, name: f.name, isDir: f.isDir, children: f.isDir ? [] : undefined };
-    map.set(f.path, node);
-    const sep = f.path.lastIndexOf("/");
-    const parentPath = sep >= 0 ? f.path.slice(0, sep) : null;
-    if (parentPath && map.has(parentPath)) {
-      map.get(parentPath)!.children!.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-  return roots;
-}
-
-function useOpenFile() {
+export function FilesPanel({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const repo = useGlobalStore(s => s.repo);
-  const { setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
-    setSelectedFile: s.setSelectedFile,
-    setFileContent: s.setFileContent,
+  const { listFiles, loadStarred } = useFilesStore(useShallow(s => ({
+    listFiles: s.listFiles,
+    loadStarred: s.loadStarred,
   })));
+  const selectedFile = useFilesStore(s => s.selectedFile);
+  const hasContent = useFilesStore(s => s.fileContent !== null);
+  const contentKey = selectedFile ? (hasContent ? selectedFile : `${selectedFile}:loading`) : "empty";
 
-  return (filePath: string) => {
-    if (!repo) return;
-    setSelectedFile(filePath);
-    setFileContent(null);
-    request<FilesGetResponse>({ type: "files/get", repo, path: filePath })
-      .then(res => setFileContent(res.content))
-      .catch(console.error);
-  };
+  useOnConnect(() => {
+    console.log("[FilesPanel] useOnConnect fired, repo:", repo);
+    loadStarred(repo);
+    listFiles(repo, request);
+  });
+
+  return (
+    <SidebarLayout
+      defaultSize={40}
+      minSize={20}
+      sidebar={<FilesSidebar />}
+      main={<FileContentPanel key={contentKey} />}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panels and sections
+// ---------------------------------------------------------------------------
+
+function FilesSidebar() {
+  const files = useFilesStore(s => s.files);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(400);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => setHeight(entries[0].contentRect.height));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  if (files.length === 0) return <EmptyState message="Loading…" />;
+
+  return (
+    <Panel>
+      <StarredSection />
+      <CollapsibleSection title="Files" fill>
+        <div ref={containerRef} className="h-full">
+          <Tree
+            data={buildTree(files)}
+            openByDefault={false}
+            width="100%"
+            height={height}
+            indent={14}
+            rowHeight={24}
+          >
+            {FileNode}
+          </Tree>
+        </div>
+      </CollapsibleSection>
+    </Panel>
+  );
 }
 
 function StarredSection() {
@@ -131,65 +159,52 @@ function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   );
 }
 
-function FilesSidebar() {
-  const files = useFilesStore(s => s.files);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(400);
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(entries => setHeight(entries[0].contentRect.height));
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  if (files.length === 0) return <EmptyState message="Loading…" />;
-
-  return (
-    <Panel>
-      <StarredSection />
-      <CollapsibleSection title="Files" fill>
-        <div ref={containerRef} className="h-full">
-          <Tree
-            data={buildTree(files)}
-            openByDefault={false}
-            width="100%"
-            height={height}
-            indent={14}
-            rowHeight={24}
-          >
-            {FileNode}
-          </Tree>
-        </div>
-      </CollapsibleSection>
-    </Panel>
-  );
-}
-
-export function FilesPanel() {
+function useOpenFile() {
   const { request } = useRelay();
   const repo = useGlobalStore(s => s.repo);
-  const { listFiles, loadStarred } = useFilesStore(useShallow(s => ({
-    listFiles: s.listFiles,
-    loadStarred: s.loadStarred,
+  const { setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
+    setSelectedFile: s.setSelectedFile,
+    setFileContent: s.setFileContent,
   })));
-  const selectedFile = useFilesStore(s => s.selectedFile);
-  const hasContent = useFilesStore(s => s.fileContent !== null);
-  const contentKey = selectedFile ? (hasContent ? selectedFile : `${selectedFile}:loading`) : "empty";
 
-  useOnConnect(() => {
+  return (filePath: string) => {
     if (!repo) return;
-    loadStarred(repo);
-    listFiles(repo, request);
-  });
+    setSelectedFile(filePath);
+    setFileContent(null);
+    request<FilesGetResponse>({ type: "files/get", repo, path: filePath })
+      .then(res => setFileContent(res.content))
+      .catch(console.error);
+  };
+}
 
-  return (
-    <SidebarLayout
-      defaultSize={40}
-      minSize={20}
-      sidebar={<FilesSidebar />}
-      main={<FileContentPanel key={contentKey} />}
-    />
-  );
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+interface TreeNode {
+  id: string;
+  name: string;
+  isDir: boolean;
+  children?: TreeNode[];
+}
+
+function buildTree(files: FileEntry[]): TreeNode[] {
+  const map = new Map<string, TreeNode>();
+  const roots: TreeNode[] = [];
+  for (const f of files) {
+    const node: TreeNode = { id: f.path, name: f.name, isDir: f.isDir, children: f.isDir ? [] : undefined };
+    map.set(f.path, node);
+    const sep = f.path.lastIndexOf("/");
+    const parentPath = sep >= 0 ? f.path.slice(0, sep) : null;
+    if (parentPath && map.has(parentPath)) {
+      map.get(parentPath)!.children!.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
 }

@@ -51,7 +51,7 @@ function PanelCard({ label, children, drag, onRemove }: {
 
 function renderPanelContent(panel: PanelInstance, repo: string): ReactNode {
   switch (panel.type) {
-    case "files":   return <FilesPanel />;
+    case "files":   return <FilesPanel repo={repo} />;
     case "tickets": return <TicketsPanel repo={repo} />;
     case "git":     return <GitPanel repo={repo} />;
   }
@@ -61,19 +61,27 @@ function renderPanelContent(panel: PanelInstance, repo: string): ReactNode {
 export function RepoPage({ repo }: Props) {
   const navigate = useNavigate();
   const { request } = useRelay();
-  const { repos, setRepo, setRepos } = useGlobalStore(useShallow(s => ({
+
+  // Set globalStore.repo and load saved dashboard state for this repo.
+  // useEffect (not useState initializer) to avoid triggering subscriber updates during render.
+  // FilesPanel uses repo prop directly, so effect order doesn't affect initial file loading.
+  useEffect(() => {
+    console.log("[RepoPage] mount/switch, repo:", repo);
+    useGlobalStore.getState().setRepo(repo);
+    useDashboardStore.getState().initForRepo(repo);
+  }, []);
+  const { repos, setRepos } = useGlobalStore(useShallow(s => ({
     repos: s.repos,
-    setRepo: s.setRepo,
     setRepos: s.setRepos,
   })));
   const { panels, layout, freeMode, addPanel, removePanel, setLayout, toggleFreeMode } =
     useDashboardStore(useShallow(s => ({
-      panels: s.panels,
-      layout: s.layout,
-      freeMode: s.freeMode,
-      addPanel: s.addPanel,
-      removePanel: s.removePanel,
-      setLayout: s.setLayout,
+      panels:         s.panels,
+      layout:         s.layout,
+      freeMode:       s.freeMode,
+      addPanel:       s.addPanel,
+      removePanel:    s.removePanel,
+      setLayout:      s.setLayout,
       toggleFreeMode: s.toggleFreeMode,
     })));
 
@@ -93,7 +101,6 @@ export function RepoPage({ repo }: Props) {
   }, []);
 
   useOnConnect(() => {
-    setRepo(repo);
     request<{ repos: string[] }>({ type: "repos/list" })
       .then(res => setRepos(res.repos))
       .catch(console.error);

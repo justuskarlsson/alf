@@ -41,9 +41,10 @@ export const useFilesStore = create<FilesStore>((set) => ({
     return { starred };
   }),
   listFiles: (repo, request) => {
+    console.log("[filesStore.listFiles] called, repo:", repo);
     set({ files: [], selectedFile: null, fileContent: null });
     request<{ files: FileEntry[] }>({ type: "files/list", repo })
-      .then(res => set({ files: res.files }))
-      .catch(console.error);
+      .then(res => { console.log("[filesStore.listFiles] response, repo:", repo, "count:", res.files.length); set({ files: res.files }); })
+      .catch(e => console.error("[filesStore.listFiles] error, repo:", repo, e));
   },
 }));

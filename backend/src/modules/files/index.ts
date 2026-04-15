@@ -35,6 +35,7 @@ export class FilesModule {
         const content = fs.readFileSync(fullPath).toString("base64");
         reply({ type: "files/get", content, isBinary: true, path: filePath });
       } catch {
+        console.error("[files/get] Cannot read file:", fullPath, "repo:", repo, "path:", filePath);
         reply({ type: "error", error: "Cannot read file" });
       }
     }

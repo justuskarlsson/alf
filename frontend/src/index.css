@@ -48,6 +48,28 @@ html, body, #root {
   opacity: 0.3;
 }
 
+/* react-diff-view: dark theme via CSS custom properties */
+.alf-diff .diff {
+  --diff-background-color: #0d1117;
+  --diff-text-color: #8b949e;
+  --diff-font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  --diff-gutter-insert-background-color: rgba(46, 160, 67, 0.15);
+  --diff-gutter-insert-text-color: #3fb950;
+  --diff-gutter-delete-background-color: rgba(248, 81, 73, 0.15);
+  --diff-gutter-delete-text-color: #f85149;
+  --diff-code-insert-background-color: rgba(46, 160, 67, 0.1);
+  --diff-code-insert-text-color: #aff5b4;
+  --diff-code-delete-background-color: rgba(248, 81, 73, 0.1);
+  --diff-code-delete-text-color: #ffd7d5;
+  --diff-code-insert-edit-background-color: rgba(46, 160, 67, 0.35);
+  --diff-code-delete-edit-background-color: rgba(248, 81, 73, 0.35);
+  --diff-omit-gutter-line-color: #f85149;
+}
+.alf-diff .diff-line { font-size: 0.75rem; }
+.alf-diff .diff-gutter { background-color: #0d1117; color: #3d444d; border-right: 1px solid #21262d; }
+.alf-diff .diff-decoration { background: #161b22 !important; color: #388bfd; font-size: 0.7rem; }
+.alf-diff .diff-decoration-content { padding: 2px 8px; }
+
 /* Shiki: strip wrapper background so the panel bg shows through cleanly */
 .alf-shiki pre {
   background: transparent !important;
