@@ -24,8 +24,9 @@ export class GitModule {
     const repo = msg.repo as string | undefined;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     try {
-      const raw = execSync("git diff --name-only", { cwd: repoPath(repo), encoding: "utf8" });
-      const files = raw.split("\n").filter(Boolean);
+      // --porcelain covers modified, staged, untracked (??), deleted, etc.
+      const raw = execSync("git status --porcelain", { cwd: repoPath(repo), encoding: "utf8" });
+      const files = raw.split("\n").filter(Boolean).map(line => line.slice(3).trim());
       reply({ type: "git/changed-files", files });
     } catch {
       reply({ type: "git/changed-files", files: [] });

@@ -48,6 +48,17 @@ function ticketsDir(repo: string): string {
   return path.join(REPOS_ROOT, repo, TICKETS_DIR);
 }
 
+// Scan dir for a .md file whose parsed frontmatter id matches — filename ≠ id.
+function findTicketById(dir: string, id: string): TicketFull | null {
+  let files: string[];
+  try { files = fs.readdirSync(dir).filter(f => f.endsWith(".md")); } catch { return null; }
+  for (const f of files) {
+    const t = readTicket(path.join(dir, f));
+    if (t?.id === id) return t;
+  }
+  return null;
+}
+
 function listTickets(repo: string): TicketMeta[] {
   const dir = ticketsDir(repo);
   let files: string[];
@@ -73,7 +84,7 @@ export class TicketsModule {
     const repo = msg.repo as string | undefined;
     const id = msg.id as string | undefined;
     if (!repo || !id) { reply({ type: "error", error: "Missing repo or id" }); return; }
-    const ticket = readTicket(path.join(ticketsDir(repo), `${id}.md`));
+    const ticket = findTicketById(ticketsDir(repo), id);
     if (!ticket) { reply({ type: "error", error: "Ticket not found" }); return; }
     reply({ type: "tickets/get", ticket });
   }
