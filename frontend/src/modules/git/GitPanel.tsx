@@ -2,7 +2,7 @@ import { parseDiff, Diff, Hunk } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
-import { useOnConnect } from "../../core/useOnConnect";
+import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { useGitStore, type Worktree } from "./store";
 
@@ -11,7 +11,6 @@ import { useGitStore, type Worktree } from "./store";
 // ---------------------------------------------------------------------------
 
 export function GitPanel({ repo }: { repo: string }) {
-  const { request } = useRelay();
   const { setWorktrees, loadChangedFiles, loadDiff, setSelectedWorktree } = useGitStore(useShallow(s => ({
     setWorktrees: s.setWorktrees,
     loadChangedFiles: s.loadChangedFiles,
@@ -21,7 +20,7 @@ export function GitPanel({ repo }: { repo: string }) {
   const selectedWorktree = useGitStore(s => s.selectedWorktree);
   const activeRepo = selectedWorktree?.path.split("/").pop() ?? repo;
 
-  useOnConnect(() => {
+  usePanelInit((request) => {
     setSelectedWorktree(null);
     loadChangedFiles(repo, request);
     loadDiff(repo, null, request);

@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
-import { useOnConnect } from "../../core/useOnConnect";
+import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, EmptyState } from "../../panels/Panel";
 import { useTicketsStore, type TicketMeta } from "./store";
 
@@ -84,10 +84,9 @@ function TicketDetail() {
 }
 
 export function TicketsPanel({ repo }: { repo: string }) {
-  const { request } = useRelay();
   const setTickets = useTicketsStore(s => s.setTickets);
 
-  useOnConnect(() => {
+  usePanelInit((request) => {
     setTickets([]);
     request<{ tickets: TicketMeta[] }>({ type: "tickets/list", repo })
       .then(res => setTickets(res.tickets))

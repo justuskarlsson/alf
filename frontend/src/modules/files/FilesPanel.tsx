@@ -3,8 +3,8 @@ import { Tree, type NodeRendererProps } from "react-arborist";
 import { useShallow } from "zustand/react/shallow";
 import type { FilesGetResponse } from "@alf/types";
 import { useRelay } from "../../core/RelayProvider";
-import { useOnConnect } from "../../core/useOnConnect";
-import { useGlobalStore } from "../../core/globalStore";
+import { usePanelInit } from "../../core/usePanelInit";
+import { useRepo } from "../../core/useRepo";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { FileContentPanel } from "./FileContentPanel";
 import { useFilesStore, type FileEntry } from "./store";
@@ -14,7 +14,6 @@ import { useFilesStore, type FileEntry } from "./store";
 // ---------------------------------------------------------------------------
 
 export function FilesPanel({ repo }: { repo: string }) {
-  const { request } = useRelay();
   const { listFiles, loadStarred } = useFilesStore(useShallow(s => ({
     listFiles: s.listFiles,
     loadStarred: s.loadStarred,
@@ -23,8 +22,7 @@ export function FilesPanel({ repo }: { repo: string }) {
   const hasContent = useFilesStore(s => s.fileContent !== null);
   const contentKey = selectedFile ? (hasContent ? selectedFile : `${selectedFile}:loading`) : "empty";
 
-  useOnConnect(() => {
-    console.log("[FilesPanel] useOnConnect fired, repo:", repo);
+  usePanelInit((request) => {
     loadStarred(repo);
     listFiles(repo, request);
   });
@@ -81,7 +79,7 @@ function FilesSidebar() {
 
 function StarredSection() {
   const openFile = useOpenFile();
-  const repo = useGlobalStore(s => s.repo);
+  const repo = useRepo();
   const { files, starred, unstar } = useFilesStore(useShallow(s => ({
     files: s.files,
     starred: s.starred,
@@ -118,7 +116,7 @@ function StarredSection() {
 
 function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const openFile = useOpenFile();
-  const repo = useGlobalStore(s => s.repo);
+  const repo = useRepo();
   const { starred, star, unstar, selectedFile } = useFilesStore(useShallow(s => ({
     starred: s.starred,
     star: s.star,
@@ -165,7 +163,7 @@ function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
 
 function useOpenFile() {
   const { request } = useRelay();
-  const repo = useGlobalStore(s => s.repo);
+  const repo = useRepo();
   const { setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
     setSelectedFile: s.setSelectedFile,
     setFileContent: s.setFileContent,
