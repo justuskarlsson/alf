@@ -53,3 +53,48 @@ Here we want to lay the foundation for robust infra and testing:
     - How to handle tickets? Should we use .orc/tickets? Maybe, but lets rebrand to .alf/tickets.
 - Infra: Fix backend logs. Right now, I dont see the dispatches and requests done from front-end. This is the key information. 
 - git panel. See frontend/pseudo.tsx.
+
+### MVP 3
+Introduce agents.
+
+__Terminology (in abstraction order, first highest level):__
+- Session: A claude code or codex session. A conversation. Consists of ->
+- Turn: A session is multiple turns. A turn is when the session gets a user prompt, and then everything it does (tools, thinking, text) before giving up its turn and yielding back to the user.
+- Activity: What a turn consists of. An activity has different types, either: thinking, tool or text. So a turn is a list of multiple chronological activities, for example:
+    - First some thinking
+    - Then tool use
+    - another tool use
+    - Thinking
+    - Some text
+In most Agent SDKs (like claude code sdk), an activity is begun with a "{activity_type}_start" streaming event. 
+- Delta: After the "{activity_type}_start" streaming event, we get lots of {activity_type}_delta", to append to current activity content. 
+
+__Agent Core__
+- Flow: req: /agents/send -> modules/agents/handler.ts (makes us of core/agent, creates object based on req, finds impl to use based on req) -> modules/agents/implementations/* (gets along the core object with helpers).
+- Implementations to support:
+    - test: The first we implement. Not an llm. Deterministic simple implementation for testing. For testing the implementation interface and that everything works. So should still support forking, streaming, all the stuff. But doesnt cost money, and makes it easy to debug.
+    - claude code agent sdk
+    - codex agent sdk
+We will share a lot of logic between using different implementations, that's why we have a shared core logic that's abstracted for the specific vendor implementations. We can think of the implementation as a lightweight adapter, mostly plumbing.
+- core/agents: Has helpers for handling the flow of events from the agent turn (and creating and registering the session in our storage). The
+
+
+__Features to support eventually__
+- Chat message	Send prompt, get streaming response, session continuity
+- New conversation	Create conversation, auto-generate title
+- List conversations	Sorted by last updated
+- Fork conversation	Branch from existing session
+- Update conversation	Rename, archive
+- Voice message	Audio → transcribe → agent
+- Transcribe (standalone)	Transcribe clip without running agent
+- Annotations (mostly frontend, gets formatted into the text prompt) - But basically that the user can select text, record or type an annotation to that. Really love and make a lot of use of it (see `~/repos/nanoclaw-dev/alf-desktop`)
+- Invoke	One-off prompt, no conversation/session
+- Cancel	Interrupt running agent query
+- Orchestrate	→ mode param on message. Should be able to just add option on any session. Primarily, this option restricts the set of tools that the agent can use to basically only `spawn_agent`. 
+- Pending queue	Queue messages for offline clients, flush on reconnect
+- Event log replay	→ single catch-up message per conversation on reconnect
+
+__How to support and implement features cleanly__
+- Major important design decision
+- How to support persistance and storage on backend? Use sqlite or jsonl files? Should we store everything (all activities), or just user prompt and final text activity per turn? Where to store it? I'm leaning towards storing everything in the alf repo (not per repo conversation storage). So if we use sqlite, then we need to implement a custom sqlite git merge strat (not that difficult with uuid ids in db).
+- How to extract a shared core that implementations can make use of?
