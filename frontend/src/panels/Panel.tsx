@@ -7,7 +7,7 @@ import {
 } from "react-resizable-panels";
 
 export function Panel({ children }: { children: ReactNode }) {
-  return <div className="h-full flex flex-col overflow-hidden bg-alf-bg">{children}</div>;
+  return <div className="h-full flex flex-col overflow-hidden bg-alf-canvas">{children}</div>;
 }
 
 interface SidebarLayoutProps {
