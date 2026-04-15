@@ -16,8 +16,7 @@ Clean minimal (incremental) refactor of ~/repos/hans , which itself is an untest
 
 
 ## Files to read
-- frontend/pseudo.tsx - high-level pseudo code description
-- backend/pseudo.ts - high-level pseudo code description
+- .alf/TICKETS.md
 
 ## Roadmap
 
