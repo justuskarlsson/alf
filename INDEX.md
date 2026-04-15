@@ -8,13 +8,12 @@ Clean minimal (incremental) refactor of ~/repos/hans , which itself is an untest
 - We want to move away from the traditional way (taken in nanoclaw-dev) of **conversations**. Instead what matters is context, and budgeting context for different tasks. Therefor the **fork** method is vital to fork out from a specific context, to handle a specific task, without polluting the context. This was how the idea of an orchestrator was born. The orchestrator would only have one allowed tool: **spawn_agent**. So that the orchestrator context (with user prompts and short agent results), would in principle almost never fill up. This in retrospect might be a bit draconian, and now the orchestrator should just be another tool (panel) alongside regular nanoclaw agents. But we do want to expand on **branching** (super simple graph overview of a conversation chain maybe?). 
 - agent.ts , currently uses claude code agent sdk. Would want add the ability to also use codex sdk. So an agnostic core, and then adapters for either claude code sdk or codex sdk. 
 
-## Dilemmas
-- How to handle state (primarily frontend). In nanoclaw-dev, we just have one big zustand store. This feels brittle, and non-modular, and like a bad coding practice. So either use zustand in a different way. Or maybe even think about using mobx or some other state library. What will fit well with out panel structure? For now, modular zustand stores.
-
 ## Instructions
 - Keep file structure clean. 
 - "pseudo.ts|tsx" should be treated as gospel. Clear instruction on what we want.
 - NEVER use `useEffect` with any deps. Only time you can use that is with empty dependency array. Handle those use cases in other cleaner ways.
+- Use 3-layered onion design philoshopy. At the inner core, we have the data (that is persisted). This is the truth. Then we have `core`. This should be small and the human developer should know this by heart. That's why it's got to be small. Should be 10% of the code, but 90% of the execution flow should flow through this (90/10 rule). And then the rest, which should be the actual use cases and should be grouped into modules with clear boundaries. These modules should primarily use `core` to handle data, but also to reduce redundancy and keep the 90/10 rule.
+
 
 ## Files to read
 - frontend/pseudo.tsx - high-level pseudo code description
@@ -58,6 +57,7 @@ Here we want to lay the foundation for robust infra and testing:
 __Major focuses__
 - Introduce agents
 - Test-suite, make use of tests (primarily backend, maybe also front-end but less easy wins).
+- Nice to have: syntax highlighting for git diff(reuse file viewer syntax highlighter?), etc..
 
 __Terminology (in abstraction order, first highest level):__
 - Session: A claude code or codex session. A conversation. Consists of ->
@@ -100,3 +100,4 @@ __How to support and implement features cleanly__
 - Major important design decision
 - How to support persistance and storage on backend? Use sqlite or jsonl files? Should we store everything (all activities), or just user prompt and final text activity per turn? Where to store it? I'm leaning towards storing everything in the alf repo (not per repo conversation storage). So if we use sqlite, then we need to implement a custom sqlite git merge strat (not that difficult with uuid ids in db).
 - How to extract a shared core that implementations can make use of?
+- 
