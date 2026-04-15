@@ -48,6 +48,34 @@ export function dispatch(raw: string, send: (msg: object) => void) {
     return;
   }
 
-  log.info("→", { type, connectionId, requestId });
-  handler(msg, (response) => send({ ...response, connectionId, requestId }));
+  const payload = omit(msg, "type", "connectionId", "requestId");
+  log.info(`→ ${type}`, Object.keys(payload).length ? truncate(payload) : undefined);
+  handler(msg, (response) => {
+    const resPayload = omit(response as Record<string, unknown>, "connectionId", "requestId");
+    log.info(`← ${type}`, truncate(resPayload));
+    send({ ...response, connectionId, requestId });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const MAX_VAL = 120;
+
+function omit(obj: Record<string, unknown>, ...keys: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (!keys.includes(k)) out[k] = v;
+  }
+  return out;
+}
+
+function truncate(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const s = typeof v === "string" ? v : JSON.stringify(v);
+    out[k] = s && s.length > MAX_VAL ? s.slice(0, MAX_VAL) + "…" : v;
+  }
+  return out;
 }

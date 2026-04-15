@@ -66,7 +66,6 @@ export function RepoPage({ repo }: Props) {
   // useEffect (not useState initializer) to avoid triggering subscriber updates during render.
   // FilesPanel uses repo prop directly, so effect order doesn't affect initial file loading.
   useEffect(() => {
-    console.log("[RepoPage] mount/switch, repo:", repo);
     useGlobalStore.getState().setRepo(repo);
     useDashboardStore.getState().initForRepo(repo);
   }, []);

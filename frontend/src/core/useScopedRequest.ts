@@ -13,6 +13,7 @@ export function useScopedRequest(): ScopedRequest {
   const aliveRef = useRef(true);
 
   useEffect(() => {
+    aliveRef.current = true; // Reset on remount (handles React StrictMode double-invoke)
     return () => { aliveRef.current = false; };
   }, []);
 
