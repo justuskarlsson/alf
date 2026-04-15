@@ -31,7 +31,7 @@ function readTicket(filePath: string): TicketFull | null {
   try {
     const raw = fs.readFileSync(filePath, "utf8");
     const { meta, body } = parseFrontmatter(raw);
-    const id = (meta.id as string) || path.basename(filePath, ".md");
+    const id = path.basename(filePath, ".md"); // filename is the canonical id
     return {
       id,
       title: (meta.title as string) || id,
@@ -46,17 +46,6 @@ function readTicket(filePath: string): TicketFull | null {
 
 function ticketsDir(repo: string): string {
   return path.join(REPOS_ROOT, repo, TICKETS_DIR);
-}
-
-// Scan dir for a .md file whose parsed frontmatter id matches — filename ≠ id.
-function findTicketById(dir: string, id: string): TicketFull | null {
-  let files: string[];
-  try { files = fs.readdirSync(dir).filter(f => f.endsWith(".md")); } catch { return null; }
-  for (const f of files) {
-    const t = readTicket(path.join(dir, f));
-    if (t?.id === id) return t;
-  }
-  return null;
 }
 
 function listTickets(repo: string): TicketMeta[] {
@@ -84,7 +73,7 @@ export class TicketsModule {
     const repo = msg.repo as string | undefined;
     const id = msg.id as string | undefined;
     if (!repo || !id) { reply({ type: "error", error: "Missing repo or id" }); return; }
-    const ticket = findTicketById(ticketsDir(repo), id);
+    const ticket = readTicket(path.join(ticketsDir(repo), `${id}.md`));
     if (!ticket) { reply({ type: "error", error: "Ticket not found" }); return; }
     reply({ type: "tickets/get", ticket });
   }

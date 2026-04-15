@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import path from "path";
 import type { Worktree } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
@@ -39,15 +39,8 @@ export class GitModule {
     const file = msg.file as string | undefined;
     const branch = msg.branch as string | undefined;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
-    try {
-      const args = ["git", "diff", "--no-color", "-U5"];
-      if (branch) args.push(branch);
-      if (file) args.push("--", file);
-      const diff = execSync(args.join(" "), { cwd: repoPath(repo), encoding: "utf8" });
-      reply({ type: "git/diff", diff, file: file ?? null });
-    } catch {
-      reply({ type: "git/diff", diff: "", file: file ?? null });
-    }
+    const diff = buildDiff(repoPath(repo), file ?? null, branch ?? null);
+    reply({ type: "git/diff", diff, file: file ?? null });
   }
 }
 
@@ -57,6 +50,37 @@ export class GitModule {
 
 function repoPath(repo: string): string {
   return path.join(REPOS_ROOT, repo);
+}
+
+function buildDiff(cwd: string, file: string | null, branch: string | null): string {
+  if (file) {
+    // Untracked file: diff against /dev/null to show full content as additions.
+    if (isUntracked(cwd, file)) return untrackedDiff(cwd, file);
+    const args = ["diff", "--no-color", "-U5", branch ?? "HEAD", "--", file];
+    return git(cwd, args);
+  }
+  // All changes: everything vs HEAD + untracked files as new-file diffs.
+  const tracked = git(cwd, ["diff", "--no-color", "-U5", "HEAD"]);
+  const newFiles = git(cwd, ["ls-files", "--others", "--exclude-standard"])
+    .split("\n").filter(Boolean)
+    .map(f => untrackedDiff(cwd, f));
+  return [tracked, ...newFiles].filter(Boolean).join("\n");
+}
+
+function isUntracked(cwd: string, file: string): boolean {
+  return git(cwd, ["status", "--porcelain", "--", file]).trimStart().startsWith("??");
+}
+
+// spawnSync so file paths with spaces are safe. --no-index exits 1 when files
+// differ (always the case vs /dev/null) so stdout is on the error object.
+function untrackedDiff(cwd: string, file: string): string {
+  const res = spawnSync("git", ["diff", "--no-index", "--no-color", "-U5", "/dev/null", file], { cwd, encoding: "utf8" });
+  return res.stdout ?? "";
+}
+
+function git(cwd: string, args: string[]): string {
+  const res = spawnSync("git", args, { cwd, encoding: "utf8" });
+  return res.stdout ?? "";
 }
 
 function parseWorktrees(raw: string): Worktree[] {
