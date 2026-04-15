@@ -43,4 +43,5 @@ Depends on T-002 (impl interface), T-003 (test impl as reference), and T-001 (DA
 <!-- 2026-04-15T00:00Z agent:alfred -->
 RESOLVED: Session continuity via SDK's own session ID. On first message core creates a new SDK session and stores the returned `sdk_session_id` in `sessions` table. On subsequent messages, pass `sdk_session_id` back — SDK maintains its own history. SQLite is for multi-client visibility, not context reconstruction.
 RESOLVED: Working directory = target repo (from repo param in request).
-Q: Which claude-code agent SDK package name / version to install?
+RESOLVED: Package is `@anthropic-ai/claude-agent-sdk@^0.2.50` (confirmed from nanoclaw-dev).
+NOTE: T-007 is NOT the default impl for MVP3 testing — use the test impl (T-003). This ticket is to sketch the adapter and verify it fits the impl interface, not to make it production-ready in this epic.

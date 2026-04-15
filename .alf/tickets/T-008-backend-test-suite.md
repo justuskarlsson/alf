@@ -27,17 +27,21 @@ Layers to test:
 
 The test DB should use an in-memory SQLite instance (`:memory:`) so tests are fast and isolated.
 
+Integration tests should be able to run against a full alf-test stack (separate user service with its own ports and data directories), so individual features can be verified end-to-end: "can we branch?", "can we create a session?", "do we receive streamed messages?".
+
 ## Acceptance
 
-- [ ] Vitest configured in `backend/` (or monorepo root if shared)
-- [ ] DAL tests: create/read for all entity types, replay query correctness
+- [ ] Vitest configured (per-package `vitest.config.ts` or shared root — TBD based on what fits the monorepo)
+- [ ] Ability to run full suite OR individual tests in isolation
+- [ ] DAL tests: create/read for all entity types, replay query correctness (in-memory SQLite)
 - [ ] core/agents tests: turn writes correct activities, stream sink receives all deltas
-- [ ] Integration test: send message with test impl → verify DB state → verify detail response
-- [ ] Tests run in CI (or at minimum `npm test` works cleanly)
-- [ ] In-memory SQLite for test isolation (no real file written)
+- [ ] Integration test: send message with test impl → verify DB state → verify `agent/detail` response
+- [ ] `alf-test` user service documented (own ports, own `data/alf-test.db`, test repos)
+- [ ] All tests use test impl (T-003), no real LLM calls
 
 ## Notes
 
 <!-- 2026-04-15T00:00Z agent:alfred -->
-Q: Use vitest or jest? Lean vitest given the Vite/TS stack.
-Q: Monorepo test setup: separate `vitest.config.ts` per package or shared root config?
+RESOLVED: Vitest (fits TS/Vite stack, good monorepo support, fast isolation).
+RESOLVED: `alf-test` service stack for integration tests — separate ports and data dir from dev stack.
+RESOLVED: All tests use the test impl — no LLM calls, no cost, deterministic.

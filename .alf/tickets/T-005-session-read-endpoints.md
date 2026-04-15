@@ -45,4 +45,4 @@ This is the complement to the live stream (T-004): stream = future deltas, detai
 
 <!-- 2026-04-15T00:00Z agent:alfred -->
 RESOLVED: Sessions scoped to repo — `sessions.repo_id` FK.
-Q: Auto-generate session title (first user prompt truncated)? Or user-supplied? Roadmap says "auto-generate title" is a feature.
+RESOLVED: Default title is a placeholder (e.g. "New session"). User can rename anytime. Auto-generation from first prompt is a future nice-to-have, not MVP3.

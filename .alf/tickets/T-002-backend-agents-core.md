@@ -50,5 +50,5 @@ Key design from INDEX.md:
 ## Notes
 
 <!-- 2026-04-15T00:00Z agent:alfred -->
-Q: Should `agent/message` always create a new session, or resume an existing one by sessionId param?
-Q: Does the stream sink live in core, or does the handler pass it in? Sketch shows "if client listens to this session" as a separate concern — probably handler passes in the sink.
+RESOLVED: Two internal functions — `initSession()` (creates DB record, no SDK session ID yet) and `runTurn(sessionId, prompt)` (gets/creates SDK session on first turn, stores sdk_session_id). Can expose as two endpoints or one flexible endpoint, TBD.
+RESOLVED: Stream sink passed in by handler — core doesn't know about relay details.

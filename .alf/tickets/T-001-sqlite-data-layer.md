@@ -46,4 +46,4 @@ Design decisions to confirm before implementing:
 <!-- 2026-04-15T00:00Z agent:alfred -->
 RESOLVED: DB lives at `data/alf.db` in the alf repo, gitignored for now. Git merge strategy for SQLite (uuid PKs) is future work.
 RESOLVED: `sessions` table has `repo_id` FK — sessions are scoped to a repo.
-Q: Should `activity.content` be stored as raw text or JSON (for tool use structured data)?
+RESOLVED: `activity.content` is raw text for all types. Tool activities are formatted at ingestion as a short human-readable summary string (e.g. "read_file: src/index.ts") — no structured JSON in the DB.

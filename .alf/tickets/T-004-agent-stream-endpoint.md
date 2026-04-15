@@ -44,5 +44,5 @@ Wire format needs to mirror the Activity types: `{ type: "activity_delta", activ
 ## Notes
 
 <!-- 2026-04-15T00:00Z agent:alfred -->
-Q: Should `agent/stream` also emit turn-start / turn-end envelope events so frontend can show turn boundaries?
-Q: What happens if two clients subscribe to the same session? Both should receive deltas independently.
+RESOLVED: Stream all activity types (thinking, tool, text). Newest activity displayed on top (stack pattern — see nanoclaw-dev/alf-desktop for reference). Thinking is uncollapsed by default.
+RESOLVED: Multiple clients subscribing to the same session each receive deltas independently.

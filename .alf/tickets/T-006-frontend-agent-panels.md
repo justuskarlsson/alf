@@ -34,12 +34,19 @@ Architecture follows existing panel conventions:
 - Panel registered in `PANEL_TYPES` in `dashboardStore.ts`
 - `key={sessionId}` on the chat panel forces re-mount on session switch
 
+`AgentSessionsPanel` layout mirrors `FileListPanel`: sidebar list on the left, main content view on the right. New session button lives in this panel. Take inspiration from FileList for the split-pane structure.
+
+Activity rendering (see nanoclaw-dev/alf-desktop for reference):
+- Stack order: newest activity on top
+- All types visible: thinking (uncollapsed by default), tool (short formatted text), text (normal)
+
 ## Acceptance
 
-- [ ] `AgentSessionsPanel` lists sessions, selects one
-- [ ] `AgentChatPanel` renders full history on mount
-- [ ] Live streaming: new deltas appended as they arrive
-- [ ] Thinking activities collapsible (hidden by default, expandable)
+- [ ] `AgentSessionsPanel`: sidebar session list + main content view (mirrors FileList layout)
+- [ ] New session button in sessions panel
+- [ ] `AgentChatPanel` renders full history on mount (via `agent/detail`)
+- [ ] Live streaming: new deltas stack on top as they arrive
+- [ ] All activity types rendered: text normal, thinking uncollapsed, tool as short summary
 - [ ] Input form: textarea + send button, disabled while turn is running
 - [ ] Both panels registered in PANEL_TYPES
 - [ ] No `useEffect` with deps — all reactive via store actions and useOnConnect
@@ -47,5 +54,6 @@ Architecture follows existing panel conventions:
 ## Notes
 
 <!-- 2026-04-15T00:00Z agent:alfred -->
-Q: Should the chat panel also display tool activities? If yes, what's the preferred rendering (raw JSON, formatted, or just a badge showing tool name)?
-Q: New session button — where? In the sessions panel, or a global action?
+RESOLVED: All activity types visible, newest on top. Thinking uncollapsed by default. See nanoclaw-dev/alf-desktop for the exact pattern.
+RESOLVED: New session button in AgentSessionsPanel, not global.
+RESOLVED: Sessions panel layout = FileList-style split pane (sidebar + main content).
