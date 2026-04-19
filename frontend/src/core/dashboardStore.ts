@@ -3,12 +3,13 @@ import { persist } from "zustand/middleware";
 import type { Layout } from "react-grid-layout";
 
 // Panel type registry — add new panel types here.
-export type PanelType = "files" | "tickets" | "git";
+export type PanelType = "files" | "tickets" | "git" | "agents";
 
 export const PANEL_TYPES: Record<PanelType, { label: string }> = {
   files:   { label: "Files" },
   tickets: { label: "Tickets" },
   git:     { label: "Git" },
+  agents:  { label: "Agents" },
 };
 
 export interface PanelInstance {

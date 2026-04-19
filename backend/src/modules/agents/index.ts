@@ -5,7 +5,7 @@
 
 import { handle, push, type Reply } from "../../core/dispatch.js";
 import { initSession, runTurn, type StreamSink } from "../../core/agents/index.js";
-import { dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
+import { dbRepos, dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
 import { testImpl } from "./implementations/test.js";
 import { createLogger } from "../../core/logger.js";
 import type { ImplFn } from "../../core/agents/types.js";
@@ -85,13 +85,23 @@ export class AgentsModule {
     }
   }
 
-  /** List sessions for a repo. */
+  /** List sessions for a repo (by path — upserts repo row if needed). */
   @handle("agent/sessions/list")
   static listSessions(msg: Record<string, unknown>, reply: Reply) {
-    const { repoId } = msg as { repoId?: string };
-    if (!repoId) { reply({ type: "agent/sessions/list", error: "repoId required" }); return; }
-    const sessions = dbSessions.list(repoId);
+    const { repo } = msg as { repo?: string };
+    if (!repo) { reply({ type: "agent/sessions/list", error: "repo required" }); return; }
+    const repoRow = dbRepos.upsert(repo);
+    const sessions = dbSessions.list(repoRow.id);
     reply({ type: "agent/sessions/list", sessions });
+  }
+
+  /** Rename or update a session. */
+  @handle("agent/session/update")
+  static updateSession(msg: Record<string, unknown>, reply: Reply) {
+    const { sessionId, title } = msg as { sessionId?: string; title?: string };
+    if (!sessionId) { reply({ type: "agent/session/update", error: "sessionId required" }); return; }
+    if (title !== undefined) dbSessions.update(sessionId, { title });
+    reply({ type: "agent/session/update", ok: true });
   }
 
   /** Full turn + activity history for a session, with optional replay (lastActivityIdx). */

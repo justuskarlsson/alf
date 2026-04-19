@@ -11,6 +11,7 @@ import { useDashboardStore, PANEL_TYPES, type PanelInstance, type PanelType } fr
 import { FilesPanel } from "../modules/files/FilesPanel";
 import { TicketsPanel } from "../modules/tickets/TicketsPanel";
 import { GitPanel } from "../modules/git/GitPanel";
+import { AgentsPanel } from "../modules/agents/AgentsPanel";
 
 interface Props {
   repo: string;
@@ -54,6 +55,7 @@ function renderPanelContent(panel: PanelInstance, repo: string): ReactNode {
     case "files":   return <FilesPanel repo={repo} />;
     case "tickets": return <TicketsPanel repo={repo} />;
     case "git":     return <GitPanel repo={repo} />;
+    case "agents":  return <AgentsPanel repo={repo} />;
   }
 }
 

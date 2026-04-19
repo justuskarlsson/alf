@@ -2,12 +2,12 @@
 id: T-004
 title: agent/stream — live activity streaming to frontend
 type: feature
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Implement the `agent/stream` WS endpoint that lets a frontend client subscribe to a live session and receive activity deltas as they're produced.

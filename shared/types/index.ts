@@ -33,6 +33,51 @@ export interface TicketFull extends TicketMeta {
 }
 
 // ---------------------------------------------------------------------------
+// Agents
+// ---------------------------------------------------------------------------
+
+export interface AgentSession {
+  id: string;
+  repo_id: string;
+  title: string;
+  sdk_session_id: string | null;
+  impl: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AgentTurn {
+  id: string;
+  session_id: string;
+  prompt: string;
+  idx: number;
+  created_at: number;
+  completed_at: number | null;
+}
+
+export interface AgentActivity {
+  id: string;
+  turn_id: string;
+  session_id: string;
+  type: string; // 'thinking' | 'tool' | 'text'
+  content: string;
+  idx: number;  // 0-based within turn
+  created_at: number;
+}
+
+export interface AgentDelta {
+  sessionId: string;
+  activityType: "thinking" | "tool" | "text";
+  content: string;
+  idx: number; // changes when a new activity starts within the turn
+}
+
+export interface AgentLastCoord {
+  turnIdx: number;
+  activityIdx: number;
+}
+
+// ---------------------------------------------------------------------------
 // Git
 // ---------------------------------------------------------------------------
 

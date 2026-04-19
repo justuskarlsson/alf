@@ -2,12 +2,12 @@
 id: T-006
 title: Frontend agent panels — chat UI and session list
 type: feature
-status: open
+status: done
 priority: medium
 epic: agents
 effort: L
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Build the frontend panels for the agent feature: a session list panel and a chat/streaming panel. These are the primary user-facing deliverables of MVP3.

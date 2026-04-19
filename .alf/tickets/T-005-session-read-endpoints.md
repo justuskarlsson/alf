@@ -2,12 +2,12 @@
 id: T-005
 title: agent/overview + agent/detail — session read and replay
 type: feature
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Implement the read-side endpoints for agent sessions: `agent/overview` (list sessions) and `agent/detail` (full turn/activity history + replay catch-up).
