@@ -3,3 +3,7 @@
 node_modules/
 dist/
 *.tsbuildinfo
+
+data/alf.db
+data/alf.db-wal
+data/alf.db-shm

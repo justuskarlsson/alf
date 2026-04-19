@@ -2,12 +2,12 @@
 id: T-001
 title: SQLite data layer — schema, migrations, DAL
 type: feature
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Define the SQLite schema for the agent data layer: Repo, Session, Turn, Activity. Include a migration system and typed query helpers (DAL) consumed by `core/agents`.

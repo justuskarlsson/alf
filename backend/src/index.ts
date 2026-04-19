@@ -3,14 +3,17 @@
  */
 
 import { WebSocket } from "ws";
-import { dispatch } from "./core/dispatch.js";
+import { dispatch, initPush } from "./core/dispatch.js";
 import { createLogger } from "./core/logger.js";
+import { initDb } from "./core/db/index.js";
 
 // Register all module handlers (side-effect imports)
 import "./modules/repos/index.js";
 import "./modules/files/index.js";
 import "./modules/tickets/index.js";
 import "./modules/git/index.js";
+import "./modules/agents/index.js";
+import { cleanupSubscriber } from "./modules/agents/index.js";
 
 const log = createLogger("backend");
 
@@ -46,7 +49,11 @@ function connect() {
     try { msg = JSON.parse(raw); } catch { return; }
     // Relay system messages — not client requests
     if (msg.type === "connected") { log.info("Authenticated", { serverName: SERVER_NAME || "(default)" }); return; }
-    if (msg.type === "client-connected" || msg.type === "client-disconnected" || msg.type === "clients-online") return;
+    if (msg.type === "client-connected" || msg.type === "clients-online") return;
+    if (msg.type === "client-disconnected") {
+      if (typeof msg.connectionId === "string") cleanupSubscriber(msg.connectionId);
+      return;
+    }
     dispatch(raw, send);
   });
 
@@ -64,4 +71,6 @@ process.on("SIGTERM", () => { stopped = true; ws?.close(); process.exit(0); });
 process.on("SIGINT", () => { stopped = true; ws?.close(); process.exit(0); });
 
 log.info(`Starting`, { relay: RELAY_URL, serverName: SERVER_NAME || "(default)" });
+initDb();
+initPush(send);
 connect();

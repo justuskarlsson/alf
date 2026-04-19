@@ -2,12 +2,12 @@
 id: T-008
 title: Backend test suite — unit and integration tests
 type: task
-status: open
+status: done
 priority: medium
 epic: agents
 effort: M
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Set up a backend test suite (vitest) and write meaningful tests covering the DAL, core/agents, and the full pipeline using the test impl.

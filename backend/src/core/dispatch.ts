@@ -12,6 +12,19 @@ export type Handler = (msg: Record<string, unknown>, reply: Reply) => void;
 
 const handlers = new Map<string, Handler>();
 
+// Module-level send for pushing to arbitrary connectionIds (e.g. stream subscribers).
+let _push: ((msg: object) => void) | null = null;
+
+/** Called once at startup with the relay send function. */
+export function initPush(fn: (msg: object) => void): void {
+  _push = fn;
+}
+
+/** Push a message to any connectionId, bypassing the request/reply cycle. */
+export function push(connectionId: string, msg: object): void {
+  _push?.({ ...msg, connectionId });
+}
+
 export function register(type: string, handler: Handler) {
   handlers.set(type, handler);
 }

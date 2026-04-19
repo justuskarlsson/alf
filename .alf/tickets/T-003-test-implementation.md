@@ -2,12 +2,12 @@
 id: T-003
 title: Test agent implementation — deterministic fake for pipeline validation
 type: feature
-status: open
+status: done
 priority: high
 epic: agents
 effort: S
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Implement a deterministic, non-LLM agent impl (`implementations/test.ts`) that exercises the full pipeline without any API calls or cost.

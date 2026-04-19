@@ -2,12 +2,12 @@
 id: T-002
 title: Backend agents core — session lifecycle, turn tracking, impl dispatch
 type: feature
-status: open
+status: done
 priority: high
 epic: agents
 effort: L
 created: 2026-04-15
-updated: 2026-04-15
+updated: 2026-04-19
 ---
 
 Implement `core/agents/` on the backend: the shared module that manages session/turn/activity lifecycle, writes to SQLite via the DAL, and dispatches to a vendor implementation. This is the engine everything else plugs into.
