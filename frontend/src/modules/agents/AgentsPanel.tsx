@@ -29,9 +29,10 @@ function SessionList({ repo }: { repo: string }) {
           onClick={() => createSession(repo, request)}
           className="font-mono text-xs text-slate-500 hover:text-slate-200 transition-colors"
           title="New session"
+          data-testid="new-session-btn"
         >+ new</button>
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" data-testid="session-list">
         {sessions.length === 0 && <EmptyState message="No sessions yet." />}
         <div className="divide-y divide-alf-muted">
           {sessions.map(s => (
@@ -96,7 +97,7 @@ function ChatView({ repo }: { repo: string }) {
   return (
     <Panel>
       {/* Activity feed — newest on top */}
-      <div className="flex-1 overflow-auto flex flex-col-reverse">
+      <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed">
         <div className="flex flex-col-reverse gap-2 p-3">
           {feed.map((item, i) => <FeedItem key={i} item={item} />)}
         </div>
@@ -111,6 +112,7 @@ function ChatView({ repo }: { repo: string }) {
           placeholder={isRunning ? "Waiting for response…" : "Send a message…"}
           disabled={isRunning}
           rows={2}
+          data-testid="prompt-input"
           className="flex-1 bg-alf-bg border border-alf-border rounded px-2 py-1 text-sm font-mono
                      text-slate-200 placeholder-slate-600 resize-none focus:outline-none
                      focus:border-slate-500 transition-colors disabled:opacity-40"

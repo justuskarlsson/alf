@@ -176,7 +176,7 @@ export function RepoPage({ repo }: Props) {
           style={{ height: dims.h - 16 }}
         >
           {panels.map(panel => (
-            <div key={panel.id}>
+            <div key={panel.id} data-testid={`panel-${panel.type}`}>
               <PanelCard
                 label={panel.title ?? PANEL_TYPES[panel.type].label}
                 drag={freeMode}
