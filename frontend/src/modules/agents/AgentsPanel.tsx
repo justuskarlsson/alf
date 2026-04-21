@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, EmptyState } from "../../panels/Panel";
-import { useAgentsStore } from "./store";
-import type { AgentActivity, AgentDelta, AgentSession } from "@alf/types";
+import { useAgentsStore, type LiveState } from "./store";
+import type { AgentActivity, AgentDelta, AgentSession, AgentTurn } from "@alf/types";
 
 // ---------------------------------------------------------------------------
 // Handlers at top — helpers below
@@ -21,12 +21,17 @@ function SessionList({ repo }: { repo: string }) {
     }))
   );
 
+  function handleNew() {
+    const title = window.prompt("Session title:") ?? "";
+    createSession(repo, title, request);
+  }
+
   return (
     <Panel>
       <div className="px-3 py-2 border-b border-alf-border shrink-0 flex items-center justify-between">
         <span className="font-mono text-xs text-slate-500 uppercase tracking-widest">Sessions</span>
         <button
-          onClick={() => createSession(repo, request)}
+          onClick={handleNew}
           className="font-mono text-xs text-slate-500 hover:text-slate-200 transition-colors"
           title="New session"
           data-testid="new-session-btn"
@@ -52,13 +57,52 @@ function SessionList({ repo }: { repo: string }) {
 function SessionRow({ session, selected, onSelect }: {
   session: AgentSession; selected: boolean; onSelect: () => void;
 }) {
+  const { request } = useRelay();
+  const renameSession = useAgentsStore(s => s.renameSession);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(session.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDraft(session.title);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  function commitEdit() {
+    setEditing(false);
+    const trimmed = draft.trim() || session.title;
+    if (trimmed !== session.title) renameSession(session.id, trimmed, request);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+    if (e.key === "Escape") { setEditing(false); setDraft(session.title); }
+  }
+
   return (
     <div
-      onClick={onSelect}
+      onClick={editing ? undefined : onSelect}
+      onDoubleClick={startEdit}
       className={`px-3 py-2 cursor-pointer select-none transition-colors
         ${selected ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
     >
-      <div className="font-mono text-sm text-slate-200 truncate">{session.title}</div>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={handleKeyDown}
+          onClick={e => e.stopPropagation()}
+          className="w-full bg-alf-bg border border-slate-500 rounded px-1 py-0.5 font-mono
+                     text-sm text-slate-200 focus:outline-none"
+          data-testid="session-title-input"
+        />
+      ) : (
+        <div className="font-mono text-sm text-slate-200 truncate">{session.title}</div>
+      )}
       <div className="font-mono text-xs text-slate-600 mt-0.5">
         {new Date(session.updated_at).toLocaleDateString()}
       </div>
@@ -167,7 +211,7 @@ export function AgentsPanel({ repo }: { repo: string }) {
   });
 
   useEffect(() => {
-    const unsubDelta = subscribe("agent/delta", (msg) => appendDelta(msg as AgentDelta));
+    const unsubDelta = subscribe("agent/delta", (msg) => appendDelta(msg as unknown as AgentDelta));
     const unsubDone  = subscribe("agent/turn/done", (msg) => {
       const { sessionId } = msg as { sessionId: string };
       turnDone(sessionId, request);
@@ -190,9 +234,9 @@ export function AgentsPanel({ repo }: { repo: string }) {
 // ---------------------------------------------------------------------------
 
 function buildFeed(
-  turns: ReturnType<typeof useAgentsStore.getState>["turns"],
+  turns: AgentTurn[],
   activities: AgentActivity[],
-  live: ReturnType<typeof useAgentsStore.getState>["live"],
+  live: LiveState | null,
   pendingPrompt: string | null,
 ): FeedItemData[] {
   const items: FeedItemData[] = [];

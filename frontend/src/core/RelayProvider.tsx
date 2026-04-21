@@ -69,7 +69,7 @@ export function RelayProvider({ url, token, children }: Props) {
             pendingRef.current.delete(rid);
             clearTimeout(pending.timer);
             if (msg.type === "error") pending.reject(new Error(String(msg.error ?? "error")));
-            else pending.resolve(msg);
+            else { console.debug(`← ws ${msg.type as string}`, msg); pending.resolve(msg); }
             return;
           }
         }
@@ -103,6 +103,7 @@ export function RelayProvider({ url, token, children }: Props) {
         reject(new Error(`WS timeout: ${(msg as Record<string, unknown>).type}`));
       }, timeout);
       pendingRef.current.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
+      console.debug(`→ ws ${(msg as Record<string, unknown>).type as string}`, msg);
       clientRef.current?.send({ ...msg, requestId });
     });
   }, []);

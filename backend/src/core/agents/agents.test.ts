@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { initDb, dbActivities, dbTurns, dbSessions, dbRepos } from "../db/index.js";
 import { initSession, runTurn } from "./index.js";
+import { AgentsModule } from "../../modules/agents/index.js";
+import { initPush } from "../dispatch.js";
 import { testImpl } from "../../modules/agents/implementations/test.js";
 import type { LiveDelta } from "./types.js";
 
@@ -154,5 +156,66 @@ describe("runTurn — errors", () => {
     initDb(":memory:");
     await expect(runTurn("bad-id", "ping", testImpl, () => {}))
       .rejects.toThrow("Session not found");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// testImpl — deterministic paths
+// ---------------------------------------------------------------------------
+
+describe("testImpl — think-only path", () => {
+  it("emits only a thinking activity", async () => {
+    const sid = initSession("/repos/myapp", "test");
+    await runTurn(sid, "think-only", testImpl, () => {});
+    const acts = dbActivities.listForSession(sid);
+    expect(acts).toHaveLength(1);
+    expect(acts[0].type).toBe("thinking");
+    expect(acts[0].content).toBe("Thinking only.");
+  });
+});
+
+describe("testImpl — error path", () => {
+  it("runTurn rejects when impl throws", async () => {
+    const sid = initSession("/repos/myapp", "test");
+    await expect(runTurn(sid, "error", testImpl, () => {}))
+      .rejects.toThrow("testImpl: error path");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Subscription — subscribers receive pushed deltas
+// ---------------------------------------------------------------------------
+
+describe("subscription — fanOut via AgentsModule.message", () => {
+  it("subscriber connection receives agent/delta and agent/turn/done", async () => {
+    const sid = initSession("/repos/myapp", "test");
+    const pushed: Record<string, unknown>[] = [];
+    initPush((msg) => pushed.push(msg as Record<string, unknown>));
+
+    const cid = "test-conn-sub";
+    // Register as subscriber via the subscribe handler
+    AgentsModule.subscribe(
+      { connectionId: cid, sessionId: sid } as Record<string, unknown>,
+      () => {},
+    );
+
+    // Trigger a turn
+    AgentsModule.message(
+      { connectionId: cid, sessionId: sid, prompt: "ping" } as Record<string, unknown>,
+      () => {},
+    );
+
+    // Wait for turn/done to land in pushed
+    await vi.waitFor(
+      () => { expect(pushed.some(m => m["type"] === "agent/turn/done")).toBe(true); },
+      { timeout: 2000 },
+    );
+
+    const deltaTypes = pushed
+      .filter(m => m["type"] === "agent/delta")
+      .map(m => m["activityType"] as string);
+    expect(deltaTypes).toContain("thinking");
+    expect(deltaTypes).toContain("tool");
+    expect(deltaTypes).toContain("text");
   });
 });

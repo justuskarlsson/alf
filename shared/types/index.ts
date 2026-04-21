@@ -87,3 +87,53 @@ export interface Worktree {
   branch: string;
   bare: boolean;
 }
+
+export interface GitCommit {
+  sha: string;
+  subject: string;
+  date: string;
+}
+
+// ---------------------------------------------------------------------------
+// Agent message payloads (request shapes shared by backend handlers + frontend store)
+// ---------------------------------------------------------------------------
+
+export interface AgentCreateSessionMsg {
+  type: "agent/session/create";
+  repo: string;
+  impl?: string;
+}
+
+export interface AgentMessageMsg {
+  type: "agent/message";
+  sessionId: string;
+  prompt: string;
+}
+
+export interface AgentSubscribeMsg {
+  type: "agent/subscribe";
+  sessionId: string;
+}
+
+export interface AgentUnsubscribeMsg {
+  type: "agent/unsubscribe";
+  sessionId: string;
+}
+
+export interface AgentSessionDetailMsg {
+  type: "agent/session/detail";
+  sessionId: string;
+  afterTurnIdx?: number;
+  afterActivityIdx?: number;
+}
+
+export interface AgentSessionsListMsg {
+  type: "agent/sessions/list";
+  repo: string;
+}
+
+export interface AgentSessionUpdateMsg {
+  type: "agent/session/update";
+  sessionId: string;
+  title?: string;
+}

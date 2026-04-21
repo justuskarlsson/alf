@@ -71,6 +71,19 @@ process.on("SIGTERM", () => { stopped = true; ws?.close(); process.exit(0); });
 process.on("SIGINT", () => { stopped = true; ws?.close(); process.exit(0); });
 
 log.info(`Starting`, { relay: RELAY_URL, serverName: SERVER_NAME || "(default)" });
+
+// In test env, wipe the DB before initialising so each run starts clean.
+if (process.env.NODE_ENV === "test") {
+  const dbPath = process.env.DB_PATH ?? "";
+  if (dbPath && dbPath !== ":memory:") {
+    const { rmSync } = await import("node:fs");
+    for (const suffix of ["", "-shm", "-wal"]) {
+      try { rmSync(dbPath + suffix); } catch { /* not found — fine */ }
+    }
+    log.info("Test mode: wiped DB", { dbPath });
+  }
+}
+
 initDb();
 initPush(send);
 connect();

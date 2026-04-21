@@ -1,0 +1,17 @@
+[Unit]
+Description=Alf Test — Backend
+After=alf-test-relay.service
+Requires=alf-test-relay.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/repos/alf/backend
+ExecStart=%h/repos/alf/backend/node_modules/.bin/tsx src/index.ts
+EnvironmentFile=%h/repos/alf/infra/.env.test
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=alf-test.target

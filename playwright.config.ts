@@ -6,7 +6,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: [["list"]],
   use: {
-    baseURL: process.env.FRONTEND_URL ?? "http://localhost:5000",
+    baseURL: process.env.TEST_FRONTEND_URL ?? process.env.FRONTEND_URL ?? "http://localhost:5010",
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

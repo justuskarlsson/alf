@@ -1,5 +1,6 @@
 /**
- * Agents module — WS handlers for agent/session/create, agent/message, agent/stream.
+ * Agents module — WS handlers for agent/session/create, agent/message,
+ * agent/subscribe, agent/unsubscribe, agent/sessions/list, agent/session/detail.
  * Handlers at top. Helpers below (hoisted).
  */
 
@@ -7,6 +8,7 @@ import { handle, push, type Reply } from "../../core/dispatch.js";
 import { initSession, runTurn, type StreamSink } from "../../core/agents/index.js";
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
 import { testImpl } from "./implementations/test.js";
+import { claudeCodeImpl } from "./implementations/claude-code.js";
 import { createLogger } from "../../core/logger.js";
 import type { ImplFn } from "../../core/agents/types.js";
 
@@ -17,7 +19,10 @@ const subscribers = new Map<string, Set<string>>();
 
 const IMPLS: Record<string, ImplFn> = {
   test: testImpl,
+  "claude-code": claudeCodeImpl,
 };
+
+const DEFAULT_IMPL = process.env.DEFAULT_IMPL ?? "test";
 
 // ---------------------------------------------------------------------------
 // Handlers
@@ -27,7 +32,7 @@ export class AgentsModule {
   /** Create a new empty session without sending a message. */
   @handle("agent/session/create")
   static createSession(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, impl = "test" } = msg as { repo?: string; impl?: string };
+    const { repo, impl = DEFAULT_IMPL } = msg as { repo?: string; impl?: string };
     if (!repo) { reply({ type: "agent/session/create", error: "repo required" }); return; }
     const sessionId = initSession(repo, impl);
     reply({ type: "agent/session/create", sessionId });
@@ -40,7 +45,7 @@ export class AgentsModule {
    */
   @handle("agent/message")
   static message(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, sessionId, prompt, impl = "test" } = msg as {
+    const { repo, sessionId, prompt, impl = DEFAULT_IMPL } = msg as {
       repo?: string; sessionId?: string; prompt?: string; impl?: string;
     };
     const connectionId = msg.connectionId as string;
@@ -67,22 +72,25 @@ export class AgentsModule {
       });
   }
 
-  /** Subscribe / unsubscribe to live deltas for a session. */
-  @handle("agent/stream")
-  static stream(msg: Record<string, unknown>, reply: Reply) {
-    const { sessionId, action = "subscribe" } = msg as { sessionId?: string; action?: string };
+  /** Subscribe to live deltas for a session. */
+  @handle("agent/subscribe")
+  static subscribe(msg: Record<string, unknown>, reply: Reply) {
+    const { sessionId } = msg as { sessionId?: string };
     const connectionId = msg.connectionId as string;
+    if (!sessionId) { reply({ type: "agent/subscribe", error: "sessionId required" }); return; }
+    if (!subscribers.has(sessionId)) subscribers.set(sessionId, new Set());
+    subscribers.get(sessionId)!.add(connectionId);
+    reply({ type: "agent/subscribe", sessionId, status: "subscribed" });
+  }
 
-    if (!sessionId) { reply({ type: "agent/stream", error: "sessionId required" }); return; }
-
-    if (action === "subscribe") {
-      if (!subscribers.has(sessionId)) subscribers.set(sessionId, new Set());
-      subscribers.get(sessionId)!.add(connectionId);
-      reply({ type: "agent/stream", sessionId, status: "subscribed" });
-    } else {
-      subscribers.get(sessionId)?.delete(connectionId);
-      reply({ type: "agent/stream", sessionId, status: "unsubscribed" });
-    }
+  /** Unsubscribe from live deltas for a session. */
+  @handle("agent/unsubscribe")
+  static unsubscribe(msg: Record<string, unknown>, reply: Reply) {
+    const { sessionId } = msg as { sessionId?: string };
+    const connectionId = msg.connectionId as string;
+    if (!sessionId) { reply({ type: "agent/unsubscribe", error: "sessionId required" }); return; }
+    subscribers.get(sessionId)?.delete(connectionId);
+    reply({ type: "agent/unsubscribe", sessionId, status: "unsubscribed" });
   }
 
   /** List sessions for a repo (by path — upserts repo row if needed). */

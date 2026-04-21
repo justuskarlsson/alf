@@ -1,0 +1,16 @@
+[Unit]
+Description=Alf Test — Frontend
+After=alf-test-relay.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/repos/alf/frontend
+ExecStart=%h/repos/alf/frontend/node_modules/.bin/vite
+EnvironmentFile=%h/repos/alf/infra/.env.test
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=alf-test.target

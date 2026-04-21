@@ -1,0 +1,6 @@
+[Unit]
+Description=Alf Test Stack
+Wants=alf-test-relay.service alf-test-backend.service alf-test-frontend.service
+
+[Install]
+WantedBy=default.target

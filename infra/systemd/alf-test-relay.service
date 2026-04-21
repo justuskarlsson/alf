@@ -1,0 +1,16 @@
+[Unit]
+Description=Alf Test — Relay
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/repos/alf/relay
+ExecStart=%h/repos/alf/relay/node_modules/.bin/tsx src/index.ts
+EnvironmentFile=%h/repos/alf/infra/.env.test
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=alf-test.target

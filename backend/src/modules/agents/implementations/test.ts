@@ -2,15 +2,55 @@
  * Test implementation — deterministic, no LLM, no cost.
  * Used for validating the full pipeline and in the test suite.
  *
- * Emits: thinking → tool (fake) → text (echo of prompt).
+ * Prompt may be a plain string key or a JSON object:
+ *   { path?: "ping" | "think-only" | "error", delay?: number }
+ *
+ * Plain string keys (backward-compatible):
+ *   "ping" (default) — thinking → tool → text (echo of prompt)
+ *   "think-only"     — only a thinking activity
+ *   "error"          — throws immediately (simulates impl failure)
+ *
  * Configurable delay via TEST_IMPL_DELAY_MS env (default 50ms).
+ * A "delay" field in the JSON prompt overrides the env default.
  */
 
 import type { ImplFn } from "../../../core/agents/types.js";
 
-const DELAY = Number(process.env.TEST_IMPL_DELAY_MS ?? 50);
+const ENV_DELAY = Number(process.env.TEST_IMPL_DELAY_MS ?? 50);
+
+interface TestPrompt {
+  path?: "ping" | "think-only" | "error";
+  delay?: number;
+}
+
+function parsePrompt(raw: string): { path: string; delay: number } {
+  try {
+    const obj = JSON.parse(raw) as TestPrompt;
+    return { path: obj.path ?? "ping", delay: obj.delay ?? ENV_DELAY };
+  } catch {
+    return { path: raw, delay: ENV_DELAY };
+  }
+}
 
 export const testImpl: ImplFn = async (prompt, ctx, emit) => {
+  const { path, delay: DELAY } = parsePrompt(prompt);
+
+  if (path === "error") {
+    throw new Error("testImpl: error path");
+  }
+
+  if (path === "think-only") {
+    emit({ event: "activity_start", activityType: "thinking" });
+    const content = "Thinking only.";
+    await sleep(DELAY);
+    emit({ event: "activity_delta", activityType: "thinking", content });
+    emit({ event: "activity_end", activityType: "thinking", content });
+    emit({ event: "turn_done" });
+    return {};
+  }
+
+  // Default path: "ping" (and anything else)
+
   // 1. Thinking
   emit({ event: "activity_start", activityType: "thinking" });
   const thinkingChunks = ["Analysing the request...", " Forming a plan.", " Ready."];

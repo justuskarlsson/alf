@@ -2,7 +2,7 @@
 id: T-007
 title: Claude Code SDK adapter — production agent implementation
 type: feature
-status: open
+status: done
 priority: medium
 epic: agents
 effort: M
@@ -26,6 +26,7 @@ Key considerations:
 - API key via env (never hardcoded)
 - Repo working directory passed to the SDK session
 - Tool access: for now, standard claude code tools; later maybe restricted set for orchestrate mode
+- Disable `AskUserQuestion` and plan mode in the system prompt / SDK config — the agent should use our ticket system (`.alf/TICKETS.md`) for planning, not Claude's built-in plan mode. Reference `TICKETS.md` as a skill/tool the agent can read on demand when it needs to create or look up tickets.
 
 Depends on T-002 (impl interface), T-003 (test impl as reference), and T-001 (DAL, for session continuity).
 
@@ -43,5 +44,5 @@ Depends on T-002 (impl interface), T-003 (test impl as reference), and T-001 (DA
 <!-- 2026-04-15T00:00Z agent:alfred -->
 RESOLVED: Session continuity via SDK's own session ID. On first message core creates a new SDK session and stores the returned `sdk_session_id` in `sessions` table. On subsequent messages, pass `sdk_session_id` back — SDK maintains its own history. SQLite is for multi-client visibility, not context reconstruction.
 RESOLVED: Working directory = target repo (from repo param in request).
-RESOLVED: Package is `@anthropic-ai/claude-agent-sdk@^0.2.50` (confirmed from nanoclaw-dev).
-NOTE: T-007 is NOT the default impl for MVP3 testing — use the test impl (T-003). This ticket is to sketch the adapter and verify it fits the impl interface, not to make it production-ready in this epic.
+RESOLVED: Package is `@anthropic-ai/claude-agent-sdk` — do NOT pin a version, use latest available.
+NOTE: The claude-code impl IS the default for dev stack. The test impl (T-003) is used only in unit tests and E2E tests. Config: `DEFAULT_IMPL=claude-code` env for dev backend; tests explicitly pass `testImpl`.

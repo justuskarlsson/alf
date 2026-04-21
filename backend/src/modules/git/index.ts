@@ -1,6 +1,6 @@
 import { execSync, spawnSync } from "child_process";
 import path from "path";
-import type { Worktree } from "@alf/types";
+import type { Worktree, GitCommit } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
@@ -41,6 +41,60 @@ export class GitModule {
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     const diff = buildDiff(repoPath(repo), file ?? null, branch ?? null);
     reply({ type: "git/diff", diff, file: file ?? null });
+  }
+
+  /** List recent commits (subject + date, no author). */
+  @handle("git/commits")
+  static commits(msg: Record<string, unknown>, reply: Reply) {
+    const repo = msg.repo as string | undefined;
+    const limit = Number(msg.limit ?? 20);
+    if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
+    try {
+      const raw = git(repoPath(repo), [
+        "log", `--max-count=${limit}`,
+        "--format=%H\x1f%s\x1f%ci",
+      ]);
+      const commits: GitCommit[] = raw.split("\n").filter(Boolean).map(line => {
+        const [sha, subject, date] = line.split("\x1f");
+        return { sha, subject, date };
+      });
+      reply({ type: "git/commits", commits });
+    } catch {
+      reply({ type: "git/commits", commits: [] });
+    }
+  }
+
+  /** List files changed between a commit SHA and HEAD. */
+  @handle("git/commit/diff/files")
+  static commitDiffFiles(msg: Record<string, unknown>, reply: Reply) {
+    const repo = msg.repo as string | undefined;
+    const sha = msg.sha as string | undefined;
+    if (!repo || !sha) { reply({ type: "error", error: "Missing repo or sha" }); return; }
+    try {
+      const raw = git(repoPath(repo), ["diff", "--name-only", `${sha}..HEAD`]);
+      const files = raw.split("\n").filter(Boolean);
+      reply({ type: "git/commit/diff/files", files, sha });
+    } catch {
+      reply({ type: "git/commit/diff/files", files: [], sha: sha ?? "" });
+    }
+  }
+
+  /** Unified diff for a single file between a commit SHA and HEAD. */
+  @handle("git/commit/diff")
+  static commitDiff(msg: Record<string, unknown>, reply: Reply) {
+    const repo = msg.repo as string | undefined;
+    const sha = msg.sha as string | undefined;
+    const file = msg.file as string | undefined;
+    if (!repo || !sha) { reply({ type: "error", error: "Missing repo or sha" }); return; }
+    try {
+      const args = file
+        ? ["diff", "--no-color", "-U5", `${sha}..HEAD`, "--", file]
+        : ["diff", "--no-color", "-U5", `${sha}..HEAD`];
+      const diff = git(repoPath(repo), args);
+      reply({ type: "git/commit/diff", diff, sha, file: file ?? null });
+    } catch {
+      reply({ type: "git/commit/diff", diff: "", sha: sha ?? "", file: file ?? null });
+    }
   }
 }
 

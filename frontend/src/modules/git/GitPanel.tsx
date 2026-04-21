@@ -4,19 +4,21 @@ import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
-import { useGitStore, type Worktree } from "./store";
+import { useGitStore, type Worktree, type GitCommit } from "./store";
 
 // ---------------------------------------------------------------------------
 // Top-level export
 // ---------------------------------------------------------------------------
 
 export function GitPanel({ repo }: { repo: string }) {
-  const { setWorktrees, loadChangedFiles, loadDiff, setSelectedWorktree } = useGitStore(useShallow(s => ({
-    setWorktrees: s.setWorktrees,
-    loadChangedFiles: s.loadChangedFiles,
-    loadDiff: s.loadDiff,
-    setSelectedWorktree: s.setSelectedWorktree,
-  })));
+  const { setWorktrees, loadChangedFiles, loadDiff, setSelectedWorktree, loadCommits } =
+    useGitStore(useShallow(s => ({
+      setWorktrees: s.setWorktrees,
+      loadChangedFiles: s.loadChangedFiles,
+      loadDiff: s.loadDiff,
+      setSelectedWorktree: s.setSelectedWorktree,
+      loadCommits: s.loadCommits,
+    })));
   const selectedWorktree = useGitStore(s => s.selectedWorktree);
   const activeRepo = selectedWorktree?.path.split("/").pop() ?? repo;
 
@@ -24,6 +26,7 @@ export function GitPanel({ repo }: { repo: string }) {
     setSelectedWorktree(null);
     loadChangedFiles(repo, request);
     loadDiff(repo, null, request);
+    loadCommits(repo, request);
     request<{ worktrees: Worktree[] }>({ type: "git/worktrees", repo })
       .then(res => setWorktrees(res.worktrees))
       .catch(console.error);
@@ -71,29 +74,46 @@ function DiffView() {
 
 function GitSidebar({ activeRepo }: { activeRepo: string }) {
   const { request } = useRelay();
-  const { loadDiff, loadChangedFiles, setSelectedWorktree } = useGitStore(useShallow(s => ({
-    loadDiff: s.loadDiff,
-    loadChangedFiles: s.loadChangedFiles,
-    setSelectedWorktree: s.setSelectedWorktree,
-  })));
-  const worktrees      = useGitStore(s => s.worktrees);
-  const changedFiles   = useGitStore(s => s.changedFiles);
+  const { loadDiff, loadChangedFiles, setSelectedWorktree, selectDiffBase, loadCommitDiff } =
+    useGitStore(useShallow(s => ({
+      loadDiff: s.loadDiff,
+      loadChangedFiles: s.loadChangedFiles,
+      setSelectedWorktree: s.setSelectedWorktree,
+      selectDiffBase: s.selectDiffBase,
+      loadCommitDiff: s.loadCommitDiff,
+    })));
+  const worktrees        = useGitStore(s => s.worktrees);
+  const changedFiles     = useGitStore(s => s.changedFiles);
   const selectedDiffFile = useGitStore(s => s.selectedDiffFile);
   const selectedWorktree = useGitStore(s => s.selectedWorktree);
+  const commits          = useGitStore(s => s.commits);
+  const diffBase         = useGitStore(s => s.diffBase);
+  const commitDiffFiles  = useGitStore(s => s.commitDiffFiles);
+
+  // Files to show in the Diffs section — depends on diffBase
+  const diffFiles = diffBase === "unstaged" ? changedFiles : commitDiffFiles;
+
+  function handleFileClick(file: string | null) {
+    if (diffBase === "unstaged") {
+      loadDiff(activeRepo, file, request);
+    } else {
+      loadCommitDiff(diffBase, file, activeRepo, request);
+    }
+  }
 
   return (
     <Panel>
       <CollapsibleSection title="Diffs">
         <div
           className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
-            ${selectedDiffFile === null
+            ${diffBase === "unstaged" && selectedDiffFile === null
               ? "bg-alf-surface text-slate-300"
               : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
-          onClick={() => loadDiff(activeRepo, null, request)}
+          onClick={() => handleFileClick(null)}
         >
           All changes
         </div>
-        {changedFiles.map(file => {
+        {diffFiles.map(file => {
           const basename = file.split("/").pop() ?? file;
           const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : null;
           return (
@@ -103,7 +123,7 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
                 ${selectedDiffFile === file
                   ? "bg-alf-surface text-slate-300"
                   : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
-              onClick={() => loadDiff(activeRepo, file, request)}
+              onClick={() => handleFileClick(file)}
               title={file}
             >
               <span>{basename}</span>
@@ -111,8 +131,41 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
             </div>
           );
         })}
-        {changedFiles.length === 0 && (
+        {diffFiles.length === 0 && (
           <p className="px-3 py-1 text-slate-700 text-xs font-mono">No changes</p>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Commits">
+        {/* Unstaged row — always at top */}
+        <div
+          className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
+            ${diffBase === "unstaged"
+              ? "bg-alf-surface text-slate-300"
+              : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
+          onClick={() => selectDiffBase("unstaged", activeRepo, request)}
+        >
+          Unstaged
+        </div>
+        {commits.map((c: GitCommit) => {
+          const isActive = diffBase === c.sha;
+          const shortSubject = c.subject.length > 50 ? c.subject.slice(0, 50) + "…" : c.subject;
+          const date = new Date(c.date).toLocaleDateString();
+          return (
+            <div
+              key={c.sha}
+              className={`px-3 py-1.5 cursor-pointer select-none transition-colors
+                ${isActive ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
+              onClick={() => selectDiffBase(c.sha, activeRepo, request)}
+              title={c.subject}
+            >
+              <div className="font-mono text-xs text-slate-300 truncate">{shortSubject}</div>
+              <div className="font-mono text-xs text-slate-600">{date}</div>
+            </div>
+          );
+        })}
+        {commits.length === 0 && (
+          <p className="px-3 py-1 text-slate-700 text-xs font-mono">No commits</p>
         )}
       </CollapsibleSection>
 
