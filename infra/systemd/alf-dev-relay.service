@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=%h/repos/alf/relay
-ExecStart=%h/repos/alf/relay/node_modules/.bin/tsx src/index.ts
+ExecStart=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/relay/node_modules/.bin/tsx src/index.ts
 EnvironmentFile=%h/repos/alf/infra/.env.dev
 Restart=on-failure
 RestartSec=2

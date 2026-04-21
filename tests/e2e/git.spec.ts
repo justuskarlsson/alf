@@ -23,14 +23,14 @@ test.describe("Git panel", () => {
   test("click All changes loads diff view", async ({ page }) => {
     await goToRepo(page);
     const panel = page.locator('[data-testid="panel-git"]');
-    const allChanges = panel.getByText("All changes");
+    const allChanges = panel.locator('[data-testid="git-all-changes"]');
     if (!await allChanges.isVisible().catch(() => false)) {
       test.skip(); // nothing to diff — clean repo
       return;
     }
     await allChanges.click();
-    // Diff view appears (file headers) or "No changes" if diff is empty
-    const diffVisible = await panel.locator(".react-diff-viewer").isVisible().catch(() => false);
+    // Diff view appears (.alf-diff wrapper, from react-diff-view) or "No changes" empty state
+    const diffVisible = await panel.locator(".alf-diff").isVisible().catch(() => false);
     const noneVisible = await panel.getByText("No changes").isVisible().catch(() => false);
     expect(diffVisible || noneVisible).toBeTruthy();
   });

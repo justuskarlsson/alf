@@ -20,15 +20,17 @@ export interface PanelInstance {
 }
 
 const INITIAL_PANELS: PanelInstance[] = [
+  { id: "agents-0",  type: "agents",  args: {} },
   { id: "files-0",   type: "files",   args: {} },
   { id: "tickets-0", type: "tickets", args: {} },
   { id: "git-0",     type: "git",     args: {} },
 ];
 
 const INITIAL_LAYOUT: Layout = [
-  { i: "files-0",   x: 0, y: 0, w: 5, h: 10, minW: 2, minH: 2 },
-  { i: "tickets-0", x: 5, y: 0, w: 7, h: 5,  minW: 2, minH: 2 },
-  { i: "git-0",     x: 5, y: 5, w: 7, h: 5,  minW: 2, minH: 2 },
+  { i: "agents-0",  x: 0, y: 0, w: 8, h: 10, minW: 3, minH: 3 },
+  { i: "files-0",   x: 8, y: 0, w: 4, h: 5,  minW: 2, minH: 2 },
+  { i: "tickets-0", x: 8, y: 5, w: 4, h: 5,  minW: 2, minH: 2 },
+  { i: "git-0",     x: 0, y:10, w:12, h: 5,  minW: 2, minH: 2 },
 ];
 
 interface RepoDashboard {

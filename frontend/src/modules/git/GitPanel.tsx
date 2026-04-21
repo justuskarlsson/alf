@@ -105,6 +105,7 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
     <Panel>
       <CollapsibleSection title="Diffs">
         <div
+          data-testid="git-all-changes"
           className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
             ${diffBase === "unstaged" && selectedDiffFile === null
               ? "bg-alf-surface text-slate-300"

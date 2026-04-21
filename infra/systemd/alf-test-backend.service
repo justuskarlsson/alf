@@ -6,7 +6,7 @@ Requires=alf-test-relay.service
 [Service]
 Type=simple
 WorkingDirectory=%h/repos/alf/backend
-ExecStart=%h/repos/alf/backend/node_modules/.bin/tsx src/index.ts
+ExecStart=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/backend/node_modules/.bin/tsx src/index.ts
 EnvironmentFile=%h/repos/alf/infra/.env.test
 Restart=on-failure
 RestartSec=2

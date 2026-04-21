@@ -9,7 +9,7 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { ImplFn } from "../../../core/agents/types.js";
 import { createLogger } from "../../../core/logger.js";
 
@@ -34,13 +34,17 @@ try {
 // Adapter
 // ---------------------------------------------------------------------------
 
+const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
 const DISALLOWED_TOOLS = ["AskUserQuestion", "ExitPlanMode", "EnterPlanMode", "TodoWrite"];
 
 export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
   let capturedSessionId: string | undefined;
 
+  const repoAbsPath = resolve(join(REPOS_ROOT, ctx.repo));
+
   const options: Parameters<typeof query>[0]["options"] = {
-    cwd: ctx.repo,
+    cwd: repoAbsPath,
+    executable: process.execPath,
     disallowedTools: DISALLOWED_TOOLS,
     permissionMode: "bypassPermissions",
     allowDangerouslySkipPermissions: true,

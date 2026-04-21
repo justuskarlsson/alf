@@ -6,6 +6,8 @@ import { initPush } from "../dispatch.js";
 import { testImpl } from "../../modules/agents/implementations/test.js";
 import type { LiveDelta } from "./types.js";
 
+const LIVE = process.env.RUN_LIVE_TESTS === "1";
+
 beforeEach(() => {
   initDb(":memory:");
   process.env.TEST_IMPL_DELAY_MS = "0";
