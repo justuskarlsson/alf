@@ -6,6 +6,16 @@ import { goToRepo, withAgentsPanel } from "./helpers";
 //   tool:     "read_file: <repo>/README.md"
 //   text:     "Echo: <prompt>"  (word by word)
 // Each activity chunk has a ~50ms delay → full turn ~250ms.
+//
+// Frontend defaults to "claude-code" impl. Tests that send messages need the
+// test impl — use selectTestImpl() after creating a session.
+
+import type { Page } from "@playwright/test";
+
+/** Switch the impl selector to "test" so messages use the deterministic test impl. */
+async function selectTestImpl(page: Page) {
+  await page.getByTestId("impl-selector").selectOption("test");
+}
 
 test.describe("Agents panel", () => {
   test.beforeEach(async ({ page }) => {
@@ -42,6 +52,7 @@ test.describe("Agents panel", () => {
 
   test("send message → pending prompt appears immediately in feed", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     await page.getByTestId("prompt-input").fill("hello world");
     await page.getByRole("button", { name: "send" }).click();
 
@@ -53,6 +64,7 @@ test.describe("Agents panel", () => {
 
   test("streaming — live thinking activity appears while running", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     await page.getByTestId("prompt-input").fill("stream test");
     await page.getByRole("button", { name: "send" }).click();
 
@@ -62,6 +74,7 @@ test.describe("Agents panel", () => {
 
   test("full turn — all three activity types persist after completion", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     await page.getByTestId("prompt-input").fill("hello");
     await page.getByRole("button", { name: "send" }).click();
 
@@ -76,6 +89,7 @@ test.describe("Agents panel", () => {
 
   test("input re-enables after turn completes", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     await page.getByTestId("prompt-input").fill("ping");
     await page.getByRole("button", { name: "send" }).click();
 
@@ -85,6 +99,7 @@ test.describe("Agents panel", () => {
 
   test("Enter key sends message (not Shift+Enter)", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     await page.getByTestId("prompt-input").fill("enter key test");
     await page.getByTestId("prompt-input").press("Enter");
     await expect(page.getByTestId("chat-feed")).toContainText("enter key test");
@@ -92,6 +107,7 @@ test.describe("Agents panel", () => {
 
   test("Shift+Enter inserts newline instead of sending", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     const input = page.getByTestId("prompt-input");
     await input.fill("line one");
     await input.press("Shift+Enter");
@@ -150,6 +166,7 @@ test.describe("Agents panel", () => {
 
   test("finished text activity renders markdown", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     // Send a prompt that will be echoed — the test impl echoes "Echo: <prompt>"
     // Use a prompt with markdown-like content to verify rendering
     await page.getByTestId("prompt-input").fill("hello");
@@ -169,6 +186,7 @@ test.describe("Agents panel", () => {
 
   test("streaming — content updates incrementally in the UI", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     // Use a JSON prompt with larger delay so we can observe incremental updates
     await page.getByTestId("prompt-input").fill('{"path":"ping","delay":200}');
     await page.getByRole("button", { name: "send" }).click();
@@ -204,6 +222,7 @@ test.describe("Agents panel", () => {
     await expect(page.getByTestId("new-session-btn")).toBeVisible();
     await page.getByTestId("new-session-btn").click();
     await expect(page.getByTestId("prompt-input")).toBeVisible();
+    await selectTestImpl(page);
 
     await page.getByTestId("prompt-input").fill('{"path":"ping","delay":100}');
     await page.getByRole("button", { name: "send" }).click();
@@ -247,6 +266,7 @@ test.describe("Agents panel", () => {
     await expect(page.getByTestId("new-session-btn")).toBeVisible();
     await page.getByTestId("new-session-btn").click();
     await expect(page.getByTestId("prompt-input")).toBeVisible();
+    await selectTestImpl(page);
 
     // Use 100ms delay — test impl emits ~7 chunks (3 thinking + 1 tool + 3 text words)
     await page.getByTestId("prompt-input").fill('{"path":"ping","delay":100}');
@@ -269,10 +289,46 @@ test.describe("Agents panel", () => {
     expect(lastTs - firstTs).toBeGreaterThan(200); // at least 200ms spread
   });
 
+  // ── Impl selector ──────────────────────────────────────────────────────────
+
+  test("impl selector is visible when session is active", async ({ page }) => {
+    await page.getByTestId("new-session-btn").click();
+    await expect(page.getByTestId("prompt-input")).toBeVisible();
+    await expect(page.getByTestId("impl-selector")).toBeVisible();
+  });
+
+  test("impl selector can switch between implementations", async ({ page }) => {
+    await page.getByTestId("new-session-btn").click();
+    await expect(page.getByTestId("impl-selector")).toBeVisible();
+    const selector = page.getByTestId("impl-selector");
+    // Default is "claude-code"
+    await expect(selector).toHaveValue("claude-code");
+    // Switch to test
+    await selector.selectOption("test");
+    await expect(selector).toHaveValue("test");
+    // Switch back
+    await selector.selectOption("claude-code");
+    await expect(selector).toHaveValue("claude-code");
+  });
+
+  test("model selector visible for claude-code, hidden for test", async ({ page }) => {
+    await page.getByTestId("new-session-btn").click();
+    // Default impl is claude-code → model selector should be visible
+    await expect(page.getByTestId("model-selector")).toBeVisible();
+    await expect(page.getByTestId("model-selector")).toHaveValue("claude-opus-4-6");
+    // Switch to test → model selector should disappear
+    await page.getByTestId("impl-selector").selectOption("test");
+    await expect(page.getByTestId("model-selector")).toBeHidden();
+    // Switch back → model selector reappears
+    await page.getByTestId("impl-selector").selectOption("claude-code");
+    await expect(page.getByTestId("model-selector")).toBeVisible();
+  });
+
   // ── Persistence ─────────────────────────────────────────────────────────────
 
   test("session and history persist after page reload", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
     await page.getByTestId("prompt-input").fill("persist me");
     await page.getByRole("button", { name: "send" }).click();
     await expect(page.getByTestId("chat-feed")).toContainText("Echo: persist me", { timeout: 10_000 });

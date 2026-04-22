@@ -20,6 +20,7 @@ export interface ImplContext {
   sessionId: string;
   sdkSessionId?: string; // absent on first turn; set by impl result, then persisted
   repo: string;          // absolute path to the target repo
+  model?: string;        // model override (e.g. "claude-opus-4-6"); impl decides whether to use it
 }
 
 /**

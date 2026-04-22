@@ -45,8 +45,8 @@ export class AgentsModule {
    */
   @handle("agent/message")
   static message(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, sessionId, prompt, impl = DEFAULT_IMPL } = msg as {
-      repo?: string; sessionId?: string; prompt?: string; impl?: string;
+    const { repo, sessionId, prompt, impl = DEFAULT_IMPL, model } = msg as {
+      repo?: string; sessionId?: string; prompt?: string; impl?: string; model?: string;
     };
     const connectionId = msg.connectionId as string;
 
@@ -61,7 +61,7 @@ export class AgentsModule {
       fanOut(sid, connectionId, { type: "agent/delta", ...delta });
     };
 
-    const { done } = runTurn(sid, prompt, implFn, sink);
+    const { done } = runTurn(sid, prompt, implFn, sink, model);
 
     // Reply immediately — client needs sessionId to subscribe.
     // sdkSessionId is persisted to DB internally by runTurn (via session_ready event).

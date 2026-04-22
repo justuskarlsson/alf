@@ -49,12 +49,13 @@ export function runTurn(
   prompt: string,
   impl: ImplFn,
   sink: StreamSink,
+  model?: string,
 ): TurnHandle {
   let resolveSessionReady!: (v: string | undefined) => void;
   const sessionReady = new Promise<string | undefined>(r => { resolveSessionReady = r; });
   let sessionReadyFired = false;
 
-  const done = runTurnInner(sessionId, prompt, impl, sink, (sdkSessionId) => {
+  const done = runTurnInner(sessionId, prompt, impl, sink, model, (sdkSessionId) => {
     if (!sessionReadyFired) {
       sessionReadyFired = true;
       resolveSessionReady(sdkSessionId);
@@ -81,6 +82,7 @@ async function runTurnInner(
   prompt: string,
   impl: ImplFn,
   sink: StreamSink,
+  model: string | undefined,
   onSessionReady: (sdkSessionId: string | undefined) => void,
 ): Promise<void> {
   const session = dbSessions.get(sessionId);
@@ -97,7 +99,7 @@ async function runTurnInner(
 
   const result = await impl(
     prompt,
-    { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path },
+    { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path, model },
     (event) => {
       if (event.event === "session_ready") {
         // Persist immediately and notify caller

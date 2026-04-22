@@ -108,6 +108,8 @@ export interface AgentMessageMsg {
   type: "agent/message";
   sessionId: string;
   prompt: string;
+  impl?: string;
+  model?: string;
 }
 
 export interface AgentSubscribeMsg {

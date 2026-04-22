@@ -5,7 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
-import { useAgentsStore, type LiveState } from "./store";
+import { useAgentsStore, AVAILABLE_IMPLS, MODEL_OPTIONS, type LiveState } from "./store";
 import type { AgentActivity, AgentDelta, AgentSession, AgentTurn } from "@alf/types";
 
 // ---------------------------------------------------------------------------
@@ -113,16 +113,22 @@ function SessionRow({ session, selected, onSelect }: {
 
 function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const { selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage } =
-    useAgentsStore(useShallow(s => ({
-      selectedSessionId: s.selectedSessionId,
-      turns: s.turns,
-      activities: s.activities,
-      live: s.live,
-      isRunning: s.isRunning,
-      pendingPrompt: s.pendingPrompt,
-      sendMessage: s.sendMessage,
-    })));
+  const {
+    selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage,
+    selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
+  } = useAgentsStore(useShallow(s => ({
+    selectedSessionId: s.selectedSessionId,
+    turns: s.turns,
+    activities: s.activities,
+    live: s.live,
+    isRunning: s.isRunning,
+    pendingPrompt: s.pendingPrompt,
+    sendMessage: s.sendMessage,
+    selectedImpl: s.selectedImpl,
+    setSelectedImpl: s.setSelectedImpl,
+    selectedModel: s.selectedModel,
+    setSelectedModel: s.setSelectedModel,
+  })));
 
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -156,6 +162,36 @@ function ChatView({ repo }: { repo: string }) {
 
   return (
     <Panel>
+      {/* Impl + model selector header */}
+      <PanelHeader title="Chat">
+        <div className="flex items-center gap-1.5">
+          <select
+            value={selectedImpl}
+            onChange={e => setSelectedImpl(e.target.value)}
+            data-testid="impl-selector"
+            className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
+                       text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
+          >
+            {AVAILABLE_IMPLS.map(impl => (
+              <option key={impl} value={impl}>{impl}</option>
+            ))}
+          </select>
+          {MODEL_OPTIONS[selectedImpl] && (
+            <select
+              value={selectedModel}
+              onChange={e => setSelectedModel(e.target.value)}
+              data-testid="model-selector"
+              className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
+                         text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
+            >
+              {MODEL_OPTIONS[selectedImpl].map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      </PanelHeader>
+
       {/* Activity feed — newest on top */}
       <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed">
         <div className="flex flex-col-reverse gap-2 p-3">

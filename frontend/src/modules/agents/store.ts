@@ -20,6 +20,13 @@ export interface LiveState {
   idx: number;
 }
 
+export const AVAILABLE_IMPLS = ["claude-code", "test"] as const;
+
+/** Models available per impl. Impls not listed here have no model selector. */
+export const MODEL_OPTIONS: Record<string, string[]> = {
+  "claude-code": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7"],
+};
+
 interface AgentsStore {
   sessions: AgentSession[];
   selectedSessionId: string | null;
@@ -29,12 +36,16 @@ interface AgentsStore {
   isRunning: boolean;
   pendingPrompt: string | null; // prompt sent but turn not yet done
   _focusTrigger: number; // incremented to trigger input focus
+  selectedImpl: string; // active impl for new turns / sessions
+  selectedModel: string; // active model (only used by impls in MODEL_OPTIONS)
 
   loadSessions: (repo: string, request: WsRequest) => void;
   selectSession: (id: string, request: WsRequest) => void;
   createSession: (repo: string, title: string, request: WsRequest) => void;
   renameSession: (id: string, title: string, request: WsRequest) => void;
-  sendMessage: (prompt: string, request: WsRequest, opts?: { impl?: string }) => void;
+  sendMessage: (prompt: string, request: WsRequest) => void;
+  setSelectedImpl: (impl: string) => void;
+  setSelectedModel: (model: string) => void;
   appendDelta: (delta: AgentDelta) => void;
   turnDone: (sessionId: string, request: WsRequest) => void;
 }
@@ -48,6 +59,8 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   isRunning: false,
   pendingPrompt: null,
   _focusTrigger: 0,
+  selectedImpl: "claude-code",
+  selectedModel: "claude-opus-4-6",
 
   loadSessions: (repo, request) => {
     set({ sessions: [] });
@@ -70,7 +83,8 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   },
 
   createSession: (repo, title, request) => {
-    request<{ sessionId: string }>({ type: "agent/session/create", repo })
+    const impl = get().selectedImpl;
+    request<{ sessionId: string }>({ type: "agent/session/create", repo, impl })
       .then(res => {
         // Set title if not default, then optimistically prepend and select
         const finalTitle = title || "New session";
@@ -80,7 +94,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         }
         const stub: AgentSession = {
           id: res.sessionId, repo_id: "", title: finalTitle,
-          sdk_session_id: null, impl: "test",
+          sdk_session_id: null, impl,
           created_at: Date.now(), updated_at: Date.now(),
         };
         set(s => ({ sessions: [stub, ...s.sessions] }));
@@ -97,16 +111,24 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       .catch(console.error);
   },
 
-  sendMessage: (prompt, request, opts) => {
+  sendMessage: (prompt, request) => {
     const sid = get().selectedSessionId;
     if (!sid || get().isRunning) return;
+    const impl = get().selectedImpl;
+    const model = MODEL_OPTIONS[impl] ? get().selectedModel : undefined;
     set({ isRunning: true, pendingPrompt: prompt, live: null });
     request<{ sessionId: string; status: string }>({
-      type: "agent/message", sessionId: sid, prompt,
-      ...(opts?.impl ? { impl: opts.impl } : {}),
+      type: "agent/message", sessionId: sid, prompt, impl, model,
     }).catch(console.error);
     // Actual response content arrives via agent/delta push → appendDelta
   },
+
+  setSelectedImpl: (impl) => {
+    const models = MODEL_OPTIONS[impl];
+    set({ selectedImpl: impl, ...(models ? { selectedModel: models[0] } : {}) });
+  },
+
+  setSelectedModel: (model) => set({ selectedModel: model }),
 
   appendDelta: (delta) => {
     if (delta.sessionId !== get().selectedSessionId) return;

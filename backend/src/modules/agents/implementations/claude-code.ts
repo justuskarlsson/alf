@@ -59,6 +59,7 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
     includePartialMessages: true,
     ...(ctx.sdkSessionId ? { resume: ctx.sdkSessionId } : {}),
     ...(systemPrompt ? { systemPrompt } : {}),
+    ...(ctx.model ? { model: ctx.model } : {}),
   };
 
   // Track the current streaming content block
