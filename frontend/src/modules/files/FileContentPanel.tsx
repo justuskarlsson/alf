@@ -3,19 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { codeToHtml } from "shiki";
 import { Panel, EmptyState } from "../../panels/Panel";
 import { useFilesStore } from "./store";
-
-const EXT_LANG: Record<string, string> = {
-  ts: "typescript", tsx: "tsx", js: "javascript", jsx: "jsx",
-  py: "python", rs: "rust", go: "go", sh: "bash", bash: "bash",
-  md: "markdown", json: "json", yaml: "yaml", yml: "yaml",
-  css: "css", html: "html", sql: "sql", toml: "toml",
-  env: "bash", tf: "hcl",
-};
-
-function detectLang(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_LANG[ext] ?? "text";
-}
+import { detectLang } from "../../shared/lang";
 
 // Parent (FilesPanel) uses key={contentKey} to force re-mount when file + content
 // are both ready, so useEffect([]) fires once with correct content available.

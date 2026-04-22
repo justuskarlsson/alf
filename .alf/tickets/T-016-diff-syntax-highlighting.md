@@ -1,6 +1,6 @@
 # T-016 Syntax highlighting for git diffs
 
-## Status: open
+## Status: done
 
 ## Epic: git
 

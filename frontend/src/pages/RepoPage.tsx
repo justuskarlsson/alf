@@ -52,10 +52,10 @@ function PanelCard({ label, children, drag, onRemove }: {
 
 function renderPanelContent(panel: PanelInstance, repo: string): ReactNode {
   switch (panel.type) {
-    case "files":   return <FilesPanel repo={repo} />;
+    case "files": return <FilesPanel repo={repo} />;
     case "tickets": return <TicketsPanel repo={repo} />;
-    case "git":     return <GitPanel repo={repo} />;
-    case "agents":  return <AgentsPanel repo={repo} />;
+    case "git": return <GitPanel repo={repo} />;
+    case "agents": return <AgentsPanel repo={repo} />;
   }
 }
 
@@ -64,12 +64,20 @@ export function RepoPage({ repo }: Props) {
   const navigate = useNavigate();
   const { request } = useRelay();
 
+  // Guard: skip onLayoutChange callbacks until initForRepo has loaded the saved layout.
+  // RGL fires onLayoutChange on every render (including the initial one with INITIAL_LAYOUT).
+  // Without this guard, the stale initial callback can overwrite saved state via autosave.
+  const layoutReady = useRef(false);
+
   // Set globalStore.repo and load saved dashboard state for this repo.
   // useEffect (not useState initializer) to avoid triggering subscriber updates during render.
   // FilesPanel uses repo prop directly, so effect order doesn't affect initial file loading.
   useEffect(() => {
     useGlobalStore.getState().setRepo(repo);
     useDashboardStore.getState().initForRepo(repo);
+    // Allow onLayoutChange callbacks starting from the NEXT render cycle,
+    // after React has re-rendered with the saved layout.
+    requestAnimationFrame(() => { layoutReady.current = true; });
   }, []);
   const { repos, setRepos } = useGlobalStore(useShallow(s => ({
     repos: s.repos,
@@ -77,12 +85,12 @@ export function RepoPage({ repo }: Props) {
   })));
   const { panels, layout, freeMode, addPanel, removePanel, setLayout, toggleFreeMode } =
     useDashboardStore(useShallow(s => ({
-      panels:         s.panels,
-      layout:         s.layout,
-      freeMode:       s.freeMode,
-      addPanel:       s.addPanel,
-      removePanel:    s.removePanel,
-      setLayout:      s.setLayout,
+      panels: s.panels,
+      layout: s.layout,
+      freeMode: s.freeMode,
+      addPanel: s.addPanel,
+      removePanel: s.removePanel,
+      setLayout: s.setLayout,
       toggleFreeMode: s.toggleFreeMode,
     })));
 
@@ -156,8 +164,8 @@ export function RepoPage({ repo }: Props) {
       <div ref={containerRef} className="flex-1 min-h-0 p-2 bg-alf-bg">
         <GridLayout
           layout={layout}
-          onLayoutChange={newLayout => setLayout(newLayout)}
-          width={dims.w - 16}
+          onLayoutChange={newLayout => { if (layoutReady.current) setLayout(newLayout); }}
+          width={dims.w}
           autoSize={false}
           gridConfig={{
             cols: 12,
@@ -173,7 +181,7 @@ export function RepoPage({ repo }: Props) {
             threshold: 3,
           }}
           resizeConfig={{ enabled: freeMode }}
-          style={{ height: dims.h - 16 }}
+          style={{ height: dims.h }}
         >
           {panels.map(panel => (
             <div key={panel.id} data-testid={`panel-${panel.type}`}>

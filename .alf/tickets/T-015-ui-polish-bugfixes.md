@@ -1,6 +1,6 @@
 # T-015 UI polish & bug fixes
 
-## Status: open
+## Status: done
 
 ## Epic: maintenance
 

@@ -1,6 +1,6 @@
 # T-017 Agent implementation & model selector
 
-## Status: open
+## Status: done
 
 ## Epic: agents
 

@@ -1,10 +1,13 @@
-import { parseDiff, Diff, Hunk } from "react-diff-view";
+import { useEffect, useState } from "react";
+import { parseDiff, Diff, Hunk, type HunkData, type HunkTokens } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { useGitStore, type Worktree, type GitCommit } from "./store";
+import { detectLang } from "../../shared/lang";
+import { tokenizeDiffHunks, shikiRenderToken } from "./tokenize.js";
 
 // ---------------------------------------------------------------------------
 // Top-level export
@@ -58,17 +61,39 @@ function DiffView() {
     <Panel>
       <div className="flex-1 overflow-auto alf-diff">
         {files.map(({ oldRevision, newRevision, type, hunks, newPath }) => (
-          <div key={`${oldRevision}-${newRevision}`} className="mb-4">
-            <div className="px-3 py-1 text-xs font-mono text-slate-400 bg-alf-canvas border-b border-t border-alf-border sticky top-0 z-10">
-              {newPath}
-            </div>
-            <Diff viewType="unified" diffType={type} hunks={hunks}>
-              {hunks => hunks.map(hunk => <Hunk key={hunk.content} hunk={hunk} />)}
-            </Diff>
-          </div>
+          <HighlightedFile
+            key={`${oldRevision}-${newRevision}`}
+            type={type}
+            hunks={hunks}
+            newPath={newPath ?? ""}
+          />
         ))}
       </div>
     </Panel>
+  );
+}
+
+function HighlightedFile({ type, hunks, newPath }: {
+  type: ReturnType<typeof parseDiff>[0]["type"];
+  hunks: HunkData[];
+  newPath: string;
+}) {
+  const [tokens, setTokens] = useState<HunkTokens | null>(null);
+
+  useEffect(() => {
+    const lang = detectLang(newPath);
+    tokenizeDiffHunks(hunks, lang).then(setTokens);
+  }, [hunks, newPath]);
+
+  return (
+    <div className="mb-4">
+      <div className="px-3 py-1 text-xs font-mono text-slate-400 bg-alf-canvas border-b border-t border-alf-border sticky top-0 z-10">
+        {newPath}
+      </div>
+      <Diff viewType="unified" diffType={type} hunks={hunks} tokens={tokens} renderToken={shikiRenderToken}>
+        {hunks => hunks.map(hunk => <Hunk key={hunk.content} hunk={hunk} />)}
+      </Diff>
+    </div>
   );
 }
 

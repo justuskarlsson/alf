@@ -48,6 +48,30 @@ test.describe("Git panel", () => {
     expect(["auto", "scroll"]).toContain(overflowY);
   });
 
+  test("diff view shows syntax-highlighted spans when diff is available", async ({ page }) => {
+    await goToRepo(page);
+    const panel = page.locator('[data-testid="panel-git"]');
+    const allChanges = panel.locator('[data-testid="git-all-changes"]');
+    if (!await allChanges.isVisible().catch(() => false)) {
+      test.skip(); // nothing to diff — clean repo
+      return;
+    }
+    await allChanges.click();
+    // Wait for diff view to appear
+    const diffArea = panel.locator(".alf-diff");
+    await expect(diffArea).toBeVisible({ timeout: 5_000 });
+    // If there are actual code diffs, shiki should produce colored spans
+    const hasCodeDiff = await diffArea.locator(".diff-code").first().isVisible().catch(() => false);
+    if (!hasCodeDiff) {
+      test.skip(); // no code cells rendered
+      return;
+    }
+    // Wait briefly for async tokenization to complete, then check for styled spans
+    await page.waitForTimeout(1_500);
+    const coloredSpans = await diffArea.locator(".diff-code span[style*='color']").count();
+    expect(coloredSpans).toBeGreaterThan(0);
+  });
+
   test("worktrees section can be collapsed and expanded", async ({ page }) => {
     await goToRepo(page);
     const panel = page.locator('[data-testid="panel-git"]');
