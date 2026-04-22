@@ -1,6 +1,16 @@
-# T-014 Fix SDK spawn failure under systemd
+---
+id: T-014
+title: Fix SDK spawn failure under systemd
+type: bug
+status: done
+priority: critical
+epic: agents
+effort: M
+created: 2026-04-19
+updated: 2026-04-20
+---
 
-## Status: done
+Fix SDK spawn failure under systemd.
 
 ## Root causes (two separate bugs)
 

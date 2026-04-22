@@ -38,8 +38,9 @@ Longer background, links, logs. Read this for full picture.
 
 ## Rules for agents
 
-- **Create**: write a new file, auto-increment id by scanning existing filenames for max `T-NNN`
-- **Update status**: edit the `status` frontmatter field and `updated` date; move file to `done/` when status → `done`
+- **YAML frontmatter is REQUIRED**: every ticket MUST have a valid YAML frontmatter block between `---` delimiters at the top of the file. The backend parser reads ONLY the frontmatter — any `## Status:` headings or other markdown outside frontmatter are IGNORED. If a ticket is missing frontmatter, it will always appear as "open" in the UI regardless of what the markdown body says.
+- **Create**: write a new file with full YAML frontmatter (id, title, type, status, priority, epic, effort, created, updated). Auto-increment id by scanning existing filenames for max `T-NNN`.
+- **Update status**: edit the `status` field IN THE YAML FRONTMATTER and update the `updated` date; move file to `done/` when status → `done`
 - **Append a note**: add a line under `## Notes` with author + ISO timestamp prefix: `<!-- 2026-04-06T12:00Z agent:xyz --> note body`
 - **List**: read filenames + first ~600 bytes (frontmatter only) of each file in `.alf/tickets/`
 - **Never delete** a ticket — move to `done/` instead

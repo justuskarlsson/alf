@@ -1,10 +1,15 @@
-# T-015 UI polish & bug fixes
+---
+id: T-015
+title: UI polish & bug fixes
+type: task
+status: done
+priority: medium
+epic: maintenance
+effort: L
+created: 2026-04-20
+updated: 2026-04-22
+---
 
-## Status: done
-
-## Epic: maintenance
-
-## Summary
 Bundle of UI bugs and polish items found during manual testing across all panels.
 
 ## Items
