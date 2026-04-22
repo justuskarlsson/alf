@@ -118,4 +118,3 @@ Large Features:
 
 Smaller Features:
 - Make dev db in its own folder (like test). This makes room for prod db. We should also add systemctl services for prod (just like we have dev and test).
-- Modifying dashboard, doesnt seem to save layout. On reload, back to default.
