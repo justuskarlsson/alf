@@ -16,12 +16,14 @@ const cwd = resolve(join(REPOS_ROOT, TEST_REPO));
 
 console.log("process.execPath:", process.execPath);
 console.log("cwd:", cwd);
-console.log("SDK version:", (await import("@anthropic-ai/claude-agent-sdk/package.json", { assert: { type: "json" } })).default.version);
 console.log("---");
+
+const CLAUDE_BIN = process.env.CLAUDE_BINARY_PATH ?? "/home/juska/.local/bin/claude";
+console.log("pathToClaudeCodeExecutable:", CLAUDE_BIN);
 
 const options = {
   cwd,
-  executable: process.execPath,
+  pathToClaudeCodeExecutable: CLAUDE_BIN,
   permissionMode: "bypassPermissions",
   allowDangerouslySkipPermissions: true,
   maxTurns: 1,

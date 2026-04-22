@@ -35,6 +35,9 @@ try {
 // ---------------------------------------------------------------------------
 
 const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
+// Resolve claude binary: env override → ~/.local/bin/claude (native installer default)
+const CLAUDE_BIN = process.env.CLAUDE_BINARY_PATH
+  ?? `${process.env.HOME}/.local/bin/claude`;
 const DISALLOWED_TOOLS = ["AskUserQuestion", "ExitPlanMode", "EnterPlanMode", "TodoWrite"];
 
 export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
@@ -44,7 +47,7 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
 
   const options: Parameters<typeof query>[0]["options"] = {
     cwd: repoAbsPath,
-    executable: process.execPath,
+    pathToClaudeCodeExecutable: CLAUDE_BIN,
     disallowedTools: DISALLOWED_TOOLS,
     permissionMode: "bypassPermissions",
     allowDangerouslySkipPermissions: true,

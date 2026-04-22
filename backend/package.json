@@ -9,7 +9,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.50",
+    "@anthropic-ai/claude-agent-sdk": "0.2.117",
     "better-sqlite3": "^11.9.1",
     "tsx": "^4.19.3",
     "ws": "^8.18.2"

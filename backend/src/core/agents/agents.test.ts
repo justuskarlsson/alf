@@ -221,3 +221,36 @@ describe("subscription — fanOut via AgentsModule.message", () => {
     expect(deltaTypes).toContain("text");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Live smoke tests — skipped unless RUN_LIVE_TESTS=1
+// These call real implementations and are intentionally minimal to save tokens.
+// Run with: cd backend && env -u CLAUDECODE REPOS_ROOT=/home/juska/repos RUN_LIVE_TESTS=1 pnpm test
+// NOTE: must unset CLAUDECODE — cli.js refuses to run inside a Claude Code session.
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!LIVE)("live smoke — testImpl", () => {
+  it("completes a turn and produces activities", async () => {
+    initDb(":memory:");
+    process.env.TEST_IMPL_DELAY_MS = "0";
+    const sid = initSession("/repos/myapp", "test");
+    const deltas: LiveDelta[] = [];
+    await runTurn(sid, "ping", testImpl, d => deltas.push(d));
+    expect(dbActivities.listForSession(sid).length).toBeGreaterThan(0);
+    expect(deltas.some(d => d.activityType === "text")).toBe(true);
+  });
+});
+
+describe.skipIf(!LIVE)("live smoke — claudeCodeImpl", () => {
+  it("spawns SDK, gets at least one text activity", async () => {
+    initDb(":memory:");
+    const { claudeCodeImpl } = await import("../../modules/agents/implementations/claude-code.js");
+    const sid = initSession("alf", "claude-code");
+    const deltas: LiveDelta[] = [];
+    await runTurn(sid, "Reply with exactly the word: pong", claudeCodeImpl, d => deltas.push(d));
+    const acts = dbActivities.listForSession(sid);
+    expect(acts.some(a => a.type === "text")).toBe(true);
+    const text = acts.find(a => a.type === "text")?.content ?? "";
+    expect(text.toLowerCase()).toContain("pong");
+  }, 60_000);
+});
