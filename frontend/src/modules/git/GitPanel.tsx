@@ -103,71 +103,76 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
 
   return (
     <Panel>
+      <div className="flex-1 overflow-auto">
       <CollapsibleSection title="Diffs">
-        <div
-          data-testid="git-all-changes"
-          className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
-            ${diffBase === "unstaged" && selectedDiffFile === null
-              ? "bg-alf-surface text-slate-300"
-              : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
-          onClick={() => handleFileClick(null)}
-        >
-          All changes
+        <div className="max-h-[40vh] overflow-auto">
+          <div
+            data-testid="git-all-changes"
+            className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
+              ${diffBase === "unstaged" && selectedDiffFile === null
+                ? "bg-alf-surface text-slate-300"
+                : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
+            onClick={() => handleFileClick(null)}
+          >
+            All changes
+          </div>
+          {diffFiles.map(file => {
+            const basename = file.split("/").pop() ?? file;
+            const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : null;
+            return (
+              <div
+                key={file}
+                className={`px-3 py-1 cursor-pointer select-none font-mono text-xs transition-colors
+                  ${selectedDiffFile === file
+                    ? "bg-alf-surface text-slate-300"
+                    : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
+                onClick={() => handleFileClick(file)}
+                title={file}
+              >
+                <span>{basename}</span>
+                {dir && <span className="ml-1 text-slate-700">{dir}</span>}
+              </div>
+            );
+          })}
+          {diffFiles.length === 0 && (
+            <p className="px-3 py-1 text-slate-700 text-xs font-mono">No changes</p>
+          )}
         </div>
-        {diffFiles.map(file => {
-          const basename = file.split("/").pop() ?? file;
-          const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : null;
-          return (
-            <div
-              key={file}
-              className={`px-3 py-1 cursor-pointer select-none font-mono text-xs transition-colors
-                ${selectedDiffFile === file
-                  ? "bg-alf-surface text-slate-300"
-                  : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
-              onClick={() => handleFileClick(file)}
-              title={file}
-            >
-              <span>{basename}</span>
-              {dir && <span className="ml-1 text-slate-700">{dir}</span>}
-            </div>
-          );
-        })}
-        {diffFiles.length === 0 && (
-          <p className="px-3 py-1 text-slate-700 text-xs font-mono">No changes</p>
-        )}
       </CollapsibleSection>
 
       <CollapsibleSection title="Commits">
-        {/* Unstaged row — always at top */}
-        <div
-          className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
-            ${diffBase === "unstaged"
-              ? "bg-alf-surface text-slate-300"
-              : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
-          onClick={() => selectDiffBase("unstaged", activeRepo, request)}
-        >
-          Unstaged
+        <div className="max-h-[40vh] overflow-auto">
+          {/* Unstaged row — always at top */}
+          <div
+            className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
+              ${diffBase === "unstaged"
+                ? "bg-alf-surface text-slate-300"
+                : "text-slate-500 hover:bg-alf-surface/60 hover:text-slate-400"}`}
+            onClick={() => selectDiffBase("unstaged", activeRepo, request)}
+          >
+            Unstaged
+          </div>
+          {commits.map((c: GitCommit) => {
+            const isActive = diffBase === c.sha;
+            const shortSubject = c.subject.length > 50 ? c.subject.slice(0, 50) + "…" : c.subject;
+            const date = new Date(c.date).toLocaleDateString();
+            return (
+              <div
+                key={c.sha}
+                className={`px-3 py-1.5 cursor-pointer select-none transition-colors
+                  ${isActive ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
+                onClick={() => selectDiffBase(c.sha, activeRepo, request)}
+                title={c.subject}
+              >
+                <div className="font-mono text-xs text-slate-300 truncate">{shortSubject}</div>
+                <div className="font-mono text-xs text-slate-600">{date}</div>
+              </div>
+            );
+          })}
+          {commits.length === 0 && (
+            <p className="px-3 py-1 text-slate-700 text-xs font-mono">No commits</p>
+          )}
         </div>
-        {commits.map((c: GitCommit) => {
-          const isActive = diffBase === c.sha;
-          const shortSubject = c.subject.length > 50 ? c.subject.slice(0, 50) + "…" : c.subject;
-          const date = new Date(c.date).toLocaleDateString();
-          return (
-            <div
-              key={c.sha}
-              className={`px-3 py-1.5 cursor-pointer select-none transition-colors
-                ${isActive ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
-              onClick={() => selectDiffBase(c.sha, activeRepo, request)}
-              title={c.subject}
-            >
-              <div className="font-mono text-xs text-slate-300 truncate">{shortSubject}</div>
-              <div className="font-mono text-xs text-slate-600">{date}</div>
-            </div>
-          );
-        })}
-        {commits.length === 0 && (
-          <p className="px-3 py-1 text-slate-700 text-xs font-mono">No commits</p>
-        )}
       </CollapsibleSection>
 
       <CollapsibleSection title="Worktrees">
@@ -196,6 +201,7 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
             </div>
         }
       </CollapsibleSection>
+      </div>
     </Panel>
   );
 }

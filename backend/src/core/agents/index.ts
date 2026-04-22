@@ -14,6 +14,14 @@ export type { LiveDelta };
 /** Called by the handler for each delta during a turn. */
 export type StreamSink = (delta: LiveDelta) => void;
 
+/** Returned by runTurn — two promises the caller can await independently. */
+export interface TurnHandle {
+  /** Resolves with sdkSessionId as soon as the impl surfaces it, or undefined if N/A. */
+  sessionReady: Promise<string | undefined>;
+  /** Resolves when the full turn completes (all activities persisted). */
+  done: Promise<void>;
+}
+
 // ---------------------------------------------------------------------------
 // Session management
 // ---------------------------------------------------------------------------
@@ -29,14 +37,51 @@ export function initSession(repoPath: string, impl = "test"): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Run a single turn: call impl, stream deltas through sink, persist to DB.
- * Returns after the turn completes (or throws on error).
+ * Start a turn. Returns immediately with two promises:
+ *   sessionReady — resolves as soon as the SDK session ID is available
+ *   done         — resolves when the turn finishes (or rejects on error)
+ *
+ * The caller can await sessionReady to reply to the WS request early,
+ * while streaming continues through the sink until done resolves.
  */
-export async function runTurn(
+export function runTurn(
   sessionId: string,
   prompt: string,
   impl: ImplFn,
   sink: StreamSink,
+): TurnHandle {
+  let resolveSessionReady!: (v: string | undefined) => void;
+  const sessionReady = new Promise<string | undefined>(r => { resolveSessionReady = r; });
+  let sessionReadyFired = false;
+
+  const done = runTurnInner(sessionId, prompt, impl, sink, (sdkSessionId) => {
+    if (!sessionReadyFired) {
+      sessionReadyFired = true;
+      resolveSessionReady(sdkSessionId);
+    }
+  });
+
+  // Guarantee sessionReady always resolves — even if turn errors or impl never emits session_ready.
+  done.finally(() => {
+    if (!sessionReadyFired) {
+      sessionReadyFired = true;
+      resolveSessionReady(undefined);
+    }
+  });
+
+  return { sessionReady, done };
+}
+
+// ---------------------------------------------------------------------------
+// Inner turn logic
+// ---------------------------------------------------------------------------
+
+async function runTurnInner(
+  sessionId: string,
+  prompt: string,
+  impl: ImplFn,
+  sink: StreamSink,
+  onSessionReady: (sdkSessionId: string | undefined) => void,
 ): Promise<void> {
   const session = dbSessions.get(sessionId);
   if (!session) throw new Error(`Session not found: ${sessionId}`);
@@ -54,7 +99,14 @@ export async function runTurn(
     prompt,
     { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path },
     (event) => {
-      if (event.event === "activity_start") {
+      if (event.event === "session_ready") {
+        // Persist immediately and notify caller
+        if (!session.sdk_session_id) {
+          dbSessions.setSdkSessionId(sessionId, event.sdkSessionId);
+        }
+        onSessionReady(event.sdkSessionId);
+
+      } else if (event.event === "activity_start") {
         currentType = event.activityType;
 
       } else if (event.event === "activity_delta") {
@@ -74,9 +126,10 @@ export async function runTurn(
     },
   );
 
-  // Persist sdk_session_id on first turn
+  // Fallback: persist sdkSessionId from return value if session_ready was never emitted
   if (result.sdkSessionId && !session.sdk_session_id) {
     dbSessions.setSdkSessionId(sessionId, result.sdkSessionId);
+    onSessionReady(result.sdkSessionId);
   }
 
   void currentType; // suppress unused warning — tracked for potential partial-write recovery

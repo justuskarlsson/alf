@@ -12,6 +12,7 @@ export type ActivityEvent =
   | { event: "activity_start"; activityType: ActivityType }
   | { event: "activity_delta"; activityType: ActivityType; content: string }
   | { event: "activity_end";   activityType: ActivityType; content: string }
+  | { event: "session_ready";  sdkSessionId: string }
   | { event: "turn_done" };
 
 /** Context passed to an impl on each turn. */

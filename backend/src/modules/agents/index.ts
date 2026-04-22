@@ -57,14 +57,17 @@ export class AgentsModule {
 
     const implFn = IMPLS[impl] ?? testImpl;
 
-    // Ack immediately — the rest is async
-    reply({ type: "agent/message", sessionId: sid, status: "running" });
-
     const sink: StreamSink = (delta) => {
       fanOut(sid, connectionId, { type: "agent/delta", ...delta });
     };
 
-    runTurn(sid, prompt, implFn, sink)
+    const { done } = runTurn(sid, prompt, implFn, sink);
+
+    // Reply immediately — client needs sessionId to subscribe.
+    // sdkSessionId is persisted to DB internally by runTurn (via session_ready event).
+    reply({ type: "agent/message", sessionId: sid, status: "running" });
+
+    done
       .then(() => fanOut(sid, connectionId, { type: "agent/turn/done", sessionId: sid }))
       .catch((err) => {
         log.error("runTurn failed", { error: String(err), sessionId: sid });

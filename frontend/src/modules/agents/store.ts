@@ -28,12 +28,13 @@ interface AgentsStore {
   live: LiveState | null;
   isRunning: boolean;
   pendingPrompt: string | null; // prompt sent but turn not yet done
+  _focusTrigger: number; // incremented to trigger input focus
 
   loadSessions: (repo: string, request: WsRequest) => void;
   selectSession: (id: string, request: WsRequest) => void;
   createSession: (repo: string, title: string, request: WsRequest) => void;
   renameSession: (id: string, title: string, request: WsRequest) => void;
-  sendMessage: (prompt: string, request: WsRequest) => void;
+  sendMessage: (prompt: string, request: WsRequest, opts?: { impl?: string }) => void;
   appendDelta: (delta: AgentDelta) => void;
   turnDone: (sessionId: string, request: WsRequest) => void;
 }
@@ -46,6 +47,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   live: null,
   isRunning: false,
   pendingPrompt: null,
+  _focusTrigger: 0,
 
   loadSessions: (repo, request) => {
     set({ sessions: [] });
@@ -59,7 +61,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     if (prev && prev !== id) {
       request<AgentUnsubscribeMsg>({ type: "agent/unsubscribe", sessionId: prev }).catch(console.error);
     }
-    set({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null });
+    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, _focusTrigger: s._focusTrigger + 1 }));
     request<DetailResponse>({ type: "agent/session/detail", sessionId: id })
       .then(res => set({ turns: res.turns, activities: res.activities }))
       .catch(console.error);
@@ -95,12 +97,13 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       .catch(console.error);
   },
 
-  sendMessage: (prompt, request) => {
+  sendMessage: (prompt, request, opts) => {
     const sid = get().selectedSessionId;
     if (!sid || get().isRunning) return;
     set({ isRunning: true, pendingPrompt: prompt, live: null });
     request<{ sessionId: string; status: string }>({
       type: "agent/message", sessionId: sid, prompt,
+      ...(opts?.impl ? { impl: opts.impl } : {}),
     }).catch(console.error);
     // Actual response content arrives via agent/delta push → appendDelta
   },

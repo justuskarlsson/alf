@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
-import { Panel, SidebarLayout, EmptyState } from "../../panels/Panel";
+import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
 import { useAgentsStore, type LiveState } from "./store";
 import type { AgentActivity, AgentDelta, AgentSession, AgentTurn } from "@alf/types";
 
@@ -28,15 +30,14 @@ function SessionList({ repo }: { repo: string }) {
 
   return (
     <Panel>
-      <div className="px-3 py-2 border-b border-alf-border shrink-0 flex items-center justify-between">
-        <span className="font-mono text-xs text-slate-500 uppercase tracking-widest">Sessions</span>
+      <PanelHeader title="Sessions">
         <button
           onClick={handleNew}
           className="font-mono text-xs text-slate-500 hover:text-slate-200 transition-colors"
           title="New session"
           data-testid="new-session-btn"
         >+ new</button>
-      </div>
+      </PanelHeader>
       <div className="flex-1 overflow-auto" data-testid="session-list">
         {sessions.length === 0 && <EmptyState message="No sessions yet." />}
         <div className="divide-y divide-alf-muted">
@@ -112,7 +113,7 @@ function SessionRow({ session, selected, onSelect }: {
 
 function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const { selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage, loadSessions } =
+  const { selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage } =
     useAgentsStore(useShallow(s => ({
       selectedSessionId: s.selectedSessionId,
       turns: s.turns,
@@ -121,10 +122,25 @@ function ChatView({ repo }: { repo: string }) {
       isRunning: s.isRunning,
       pendingPrompt: s.pendingPrompt,
       sendMessage: s.sendMessage,
-      loadSessions: s.loadSessions,
     })));
 
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus input whenever _focusTrigger increments (session select/create).
+  // Subscribe directly to the store to avoid deps in useEffect.
+  // Use requestAnimationFrame to wait for React to render the input (important
+  // when ChatView transitions from EmptyState to the input form).
+  useEffect(() => {
+    let prev = useAgentsStore.getState()._focusTrigger;
+    const unsub = useAgentsStore.subscribe((state) => {
+      if (state._focusTrigger !== prev) {
+        prev = state._focusTrigger;
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+    });
+    return unsub;
+  }, []);
 
   function handleSend() {
     const trimmed = input.trim();
@@ -148,8 +164,9 @@ function ChatView({ repo }: { repo: string }) {
       </div>
 
       {/* Input */}
-      <div className="shrink-0 border-t border-alf-border p-2 flex gap-2">
+      <div className="shrink-0 border-t border-alf-border p-2 flex gap-2 items-center">
         <textarea
+          ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
@@ -166,7 +183,7 @@ function ChatView({ repo }: { repo: string }) {
           disabled={isRunning || !input.trim()}
           className="px-3 py-1 text-xs font-mono rounded border border-alf-border text-slate-400
                      hover:text-slate-200 hover:border-slate-500 transition-colors
-                     disabled:opacity-30 disabled:cursor-not-allowed self-end"
+                     disabled:opacity-30 disabled:cursor-not-allowed"
         >send</button>
       </div>
     </Panel>
@@ -185,17 +202,30 @@ function FeedItem({ item }: { item: FeedItemData }) {
       </div>
     );
   }
+
+  // Render finished text activities as markdown, everything else as plain text
+  const isText = item.activityType === "text";
+  const isFinished = !item.live;
+
   return (
-    <div className={`font-mono text-sm whitespace-pre-wrap rounded px-3 py-2
+    <div
+      data-activity-type={item.activityType}
+      className={`font-mono text-sm rounded px-3 py-2
       ${item.activityType === "thinking" ? "text-slate-500 text-xs bg-alf-canvas/50" : ""}
       ${item.activityType === "tool"     ? "text-amber-400/70 text-xs bg-alf-canvas/50" : ""}
-      ${item.activityType === "text"     ? "text-slate-200" : ""}
+      ${isText ? "text-slate-200" : ""}
       ${item.live ? "animate-pulse" : ""}`}
     >
-      {item.activityType !== "text" && (
+      {!isText && (
         <span className="text-xs text-slate-600 mr-2 uppercase">[{item.activityType}]</span>
       )}
-      {item.content}
+      {isText && isFinished ? (
+        <div className="prose prose-invert prose-sm max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown>
+        </div>
+      ) : (
+        <span className="whitespace-pre-wrap">{item.content}</span>
+      )}
     </div>
   );
 }

@@ -23,6 +23,26 @@ export async function withAgentsPanel(page: Page): Promise<void> {
   }, { repo: REPO });
 }
 
+/**
+ * Pre-seed localStorage with a single full-width tickets panel.
+ */
+export async function withTicketsPanel(page: Page): Promise<void> {
+  await page.addInitScript((data: { repo: string }) => {
+    localStorage.setItem("alf-dashboard", JSON.stringify({
+      state: {
+        saved: {
+          [data.repo]: {
+            panels: [{ id: "tickets-0", type: "tickets", args: {} }],
+            layout: [{ i: "tickets-0", x: 0, y: 0, w: 12, h: 12, minW: 2, minH: 2 }],
+            freeMode: false,
+          },
+        },
+      },
+      version: 0,
+    }));
+  }, { repo: REPO });
+}
+
 export async function goToRepo(page: Page): Promise<void> {
   await page.goto(`/${REPO}`);
 }

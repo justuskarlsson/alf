@@ -78,38 +78,48 @@ function FilesSidebar() {
 }
 
 function StarredSection() {
-  const openFile = useOpenFile();
-  const repo = useRepo();
-  const { files, starred, unstar } = useFilesStore(useShallow(s => ({
-    files: s.files,
-    starred: s.starred,
-    unstar: s.unstar,
-  })));
+  const files = useFilesStore(s => s.files);
+  const starred = useFilesStore(s => s.starred);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(200);
 
-  const starredEntries = files.filter(f => starred.includes(f.path));
-  if (starredEntries.length === 0) return null;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => setHeight(entries[0].contentRect.height));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Build filtered list: starred files + starred directories with all children
+  const starredSet = new Set(starred);
+  const included = files.filter(f => {
+    if (starredSet.has(f.path)) return true;
+    // Include children of starred directories
+    for (const s of starred) {
+      if (f.path.startsWith(s + "/")) return true;
+    }
+    return false;
+  });
+
+  if (included.length === 0) return null;
+
+  const treeData = buildTree(included);
 
   return (
     <CollapsibleSection title="Starred">
-      {starredEntries.map(f => (
-        <div
-          key={f.path}
-          className="flex items-start gap-1.5 px-2 py-0.5 hover:bg-alf-surface cursor-pointer select-none"
-          onClick={() => !f.isDir && openFile(f.path)}
+      <div ref={containerRef} className="min-h-[60px] max-h-[40vh]">
+        <Tree
+          data={treeData}
+          openByDefault={true}
+          width="100%"
+          height={height}
+          indent={14}
+          rowHeight={24}
         >
-          <button
-            className="shrink-0 mt-0.5 text-xs w-3 text-yellow-500/70 hover:text-yellow-400"
-            onClick={(e) => { e.stopPropagation(); if (repo) unstar(repo, f.path); }}
-            title="Unstar"
-          >★</button>
-          <div className="flex flex-col min-w-0">
-            <span className="font-mono text-sm text-slate-300 truncate">{f.name}</span>
-            {f.path !== f.name && (
-              <span className="font-mono text-xs text-slate-600 truncate">{f.path}</span>
-            )}
-          </div>
-        </div>
-      ))}
+          {FileNode}
+        </Tree>
+      </div>
     </CollapsibleSection>
   );
 }

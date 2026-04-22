@@ -70,6 +70,21 @@ export function CollapsibleSection({
   );
 }
 
+interface PanelHeaderProps {
+  title: string;
+  children?: ReactNode;
+}
+
+/** Shared header bar — title on the left, action controls on the right. */
+export function PanelHeader({ title, children }: PanelHeaderProps) {
+  return (
+    <div className="px-3 py-2 border-b border-alf-border shrink-0 flex items-center justify-between">
+      <span className="font-mono text-xs text-slate-500 uppercase tracking-widest">{title}</span>
+      {children && <div className="flex items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
 export function EmptyState({ message }: { message: string }) {
   return (
     <div className="h-full flex items-center justify-center text-slate-600 text-xs font-mono">

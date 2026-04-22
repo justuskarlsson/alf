@@ -29,10 +29,23 @@ test.describe("Git panel", () => {
       return;
     }
     await allChanges.click();
-    // Diff view appears (.alf-diff wrapper, from react-diff-view) or "No changes" empty state
-    const diffVisible = await panel.locator(".alf-diff").isVisible().catch(() => false);
-    const noneVisible = await panel.getByText("No changes").isVisible().catch(() => false);
-    expect(diffVisible || noneVisible).toBeTruthy();
+    // Wait for loading to finish — either diff view or "No changes" appears
+    await expect(panel.locator(".alf-diff, :text('No changes')").first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("diff sidebar sections are scrollable when overflowing", async ({ page }) => {
+    await goToRepo(page);
+    const panel = page.locator('[data-testid="panel-git"]');
+    // The sidebar scrollable wrapper (parent of CollapsibleSections) should allow scroll
+    const diffsBtn = panel.getByRole("button", { name: /diffs/i });
+    // Walk up: button -> CollapsibleSection wrapper -> scrollable container
+    const scrollContainer = diffsBtn.locator("../..");
+    const overflowY = await scrollContainer.evaluate((el) => {
+      const style = window.getComputedStyle(el);
+      return style.overflowY;
+    });
+    // Should be 'auto' or 'scroll', not 'hidden' or 'visible'
+    expect(["auto", "scroll"]).toContain(overflowY);
   });
 
   test("worktrees section can be collapsed and expanded", async ({ page }) => {

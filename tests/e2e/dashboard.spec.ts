@@ -2,19 +2,21 @@ import { test, expect } from "@playwright/test";
 import { goToRepo } from "./helpers";
 
 test.describe("Dashboard", () => {
-  test("loads default three panels (Files, Tickets, Git)", async ({ page }) => {
+  test("loads default four panels (Agents, Files, Tickets, Git)", async ({ page }) => {
     await goToRepo(page);
+    await expect(page.locator('[data-testid="panel-agents"]')).toBeVisible();
     await expect(page.locator('[data-testid="panel-files"]')).toBeVisible();
     await expect(page.locator('[data-testid="panel-tickets"]')).toBeVisible();
     await expect(page.locator('[data-testid="panel-git"]')).toBeVisible();
   });
 
-  test("unlock → add Agents panel → panel appears", async ({ page }) => {
+  test("unlock → add second Files panel → panel appears", async ({ page }) => {
     await goToRepo(page);
     await page.getByTitle("Unlock layout").click();
-    // Add panel select is now visible — pick Agents
-    await page.locator("select").filter({ hasText: "Add panel" }).selectOption("agents");
-    await expect(page.locator('[data-testid="panel-agents"]')).toBeVisible();
+    // Add a second files panel (all 4 types already in default layout)
+    const panelsBefore = await page.locator('[data-testid^="panel-files"]').count();
+    await page.locator("select").filter({ hasText: "Add panel" }).selectOption("files");
+    await expect(page.locator('[data-testid^="panel-files"]')).toHaveCount(panelsBefore + 1);
   });
 
   test("remove panel in free mode reduces panel count", async ({ page }) => {
@@ -22,9 +24,9 @@ test.describe("Dashboard", () => {
     await page.getByTitle("Unlock layout").click();
 
     const removeBtns = page.getByTitle("Remove panel");
-    await expect(removeBtns).toHaveCount(3);
+    await expect(removeBtns).toHaveCount(4);
     await removeBtns.first().click();
-    await expect(removeBtns).toHaveCount(2);
+    await expect(removeBtns).toHaveCount(3);
   });
 
   test("drag a panel to a new position", async ({ page }) => {

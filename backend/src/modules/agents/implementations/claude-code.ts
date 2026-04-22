@@ -2,15 +2,20 @@
  * Claude Code SDK adapter — production agent implementation.
  * Maps SDK streaming messages to the impl interface (ActivityEvent stream).
  *
+ * With includePartialMessages the SDK emits stream_event messages containing
+ * content_block_start / content_block_delta / content_block_stop, enabling
+ * true incremental streaming to the frontend.
+ *
  * Session continuity: the SDK's own session_id is captured from the first
- * SDKSystemMessage and returned as sdkSessionId. On subsequent turns it is
+ * SDKSystemMessage and emitted as a session_ready event so the caller can
+ * persist it and reply to the WS request early. On subsequent turns it is
  * passed back via options.resume so the SDK reconstructs the conversation.
  */
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { ImplFn } from "../../../core/agents/types.js";
+import type { ImplFn, ActivityType } from "../../../core/agents/types.js";
 import { createLogger } from "../../../core/logger.js";
 
 const log = createLogger("claude-code-impl");
@@ -51,44 +56,88 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
     disallowedTools: DISALLOWED_TOOLS,
     permissionMode: "bypassPermissions",
     allowDangerouslySkipPermissions: true,
+    includePartialMessages: true,
     ...(ctx.sdkSessionId ? { resume: ctx.sdkSessionId } : {}),
     ...(systemPrompt ? { systemPrompt } : {}),
   };
 
+  // Track the current streaming content block
+  let currentBlockType: ActivityType | null = null;
+  let currentBlockContent = "";
+
   for await (const msg of query({ prompt, options })) {
+    // -----------------------------------------------------------------------
+    // SDK init — capture session ID immediately
+    // -----------------------------------------------------------------------
     if (msg.type === "system" && msg.subtype === "init") {
       capturedSessionId = msg.session_id;
+      emit({ event: "session_ready", sdkSessionId: msg.session_id });
       continue;
     }
 
+    // -----------------------------------------------------------------------
+    // Incremental streaming via stream_event (includePartialMessages: true)
+    // -----------------------------------------------------------------------
+    if (msg.type === "stream_event") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ev = (msg as any).event;
+      if (!ev) continue;
+
+      if (ev.type === "content_block_start") {
+        const block = ev.content_block;
+        if (block?.type === "thinking") {
+          currentBlockType = "thinking";
+          currentBlockContent = "";
+          emit({ event: "activity_start", activityType: "thinking" });
+        } else if (block?.type === "text") {
+          currentBlockType = "text";
+          currentBlockContent = "";
+          emit({ event: "activity_start", activityType: "text" });
+        } else if (block?.type === "tool_use") {
+          currentBlockType = "tool";
+          currentBlockContent = block.name ? `${block.name}: ` : "";
+          emit({ event: "activity_start", activityType: "tool" });
+        }
+      }
+
+      if (ev.type === "content_block_delta" && currentBlockType) {
+        let chunk = "";
+        if (ev.delta?.type === "thinking_delta") {
+          chunk = ev.delta.thinking ?? "";
+        } else if (ev.delta?.type === "text_delta") {
+          chunk = ev.delta.text ?? "";
+        } else if (ev.delta?.type === "input_json_delta") {
+          chunk = ev.delta.partial_json ?? "";
+        }
+        if (chunk) {
+          currentBlockContent += chunk;
+          emit({ event: "activity_delta", activityType: currentBlockType, content: chunk });
+        }
+      }
+
+      if (ev.type === "content_block_stop" && currentBlockType) {
+        emit({ event: "activity_end", activityType: currentBlockType, content: currentBlockContent });
+        currentBlockType = null;
+        currentBlockContent = "";
+      }
+
+      continue;
+    }
+
+    // -----------------------------------------------------------------------
+    // Full assistant message — skip content (already streamed above),
+    // but check for errors
+    // -----------------------------------------------------------------------
     if (msg.type === "assistant") {
       if (msg.error) {
         throw new Error(`Claude Code SDK error: ${msg.error}`);
       }
-      for (const block of msg.message.content) {
-        if (block.type === "thinking" && "thinking" in block) {
-          const content = (block as { type: "thinking"; thinking: string }).thinking;
-          emit({ event: "activity_start", activityType: "thinking" });
-          emit({ event: "activity_delta", activityType: "thinking", content });
-          emit({ event: "activity_end",   activityType: "thinking", content });
-        } else if (block.type === "text" && "text" in block) {
-          const content = (block as { type: "text"; text: string }).text;
-          emit({ event: "activity_start", activityType: "text" });
-          emit({ event: "activity_delta", activityType: "text", content });
-          emit({ event: "activity_end",   activityType: "text", content });
-        } else if (block.type === "tool_use" && "name" in block) {
-          const b = block as { type: "tool_use"; name: string; input: unknown };
-          const content = `${b.name}: ${JSON.stringify(b.input)}`;
-          emit({ event: "activity_start", activityType: "tool" });
-          emit({ event: "activity_delta", activityType: "tool", content });
-          emit({ event: "activity_end",   activityType: "tool", content });
-        } else {
-          log.warn("Unhandled content block type", { type: block.type });
-        }
-      }
       continue;
     }
 
+    // -----------------------------------------------------------------------
+    // Result — final status
+    // -----------------------------------------------------------------------
     if (msg.type === "result") {
       if (msg.subtype !== "success" || msg.is_error) {
         const errMsg = "errors" in msg

@@ -1,9 +1,10 @@
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
-import { Panel, SidebarLayout, EmptyState } from "../../panels/Panel";
+import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
 import { useTicketsStore, type TicketMeta } from "./store";
 
 function TicketList({ repo }: { repo: string }) {
@@ -13,14 +14,30 @@ function TicketList({ repo }: { repo: string }) {
     selectedTicket: s.selectedTicket,
     selectTicket: s.selectTicket,
   })));
+  const [showDone, setShowDone] = useState(false);
+
+  const filtered = showDone ? tickets : tickets.filter(t => t.status !== "done");
 
   if (tickets.length === 0) return <EmptyState message="No tickets." />;
 
   return (
     <Panel>
+      <PanelHeader title="Tickets">
+        <button
+          onClick={() => setShowDone(v => !v)}
+          data-testid="filter-show-done"
+          className={`font-mono text-xs transition-colors ${showDone ? "text-slate-300" : "text-slate-600 hover:text-slate-400"}`}
+          title={showDone ? "Hide done tickets" : "Show done tickets"}
+        >{showDone ? "hide done" : "show done"}</button>
+      </PanelHeader>
       <div className="flex-1 overflow-auto">
         <div className="divide-y divide-alf-muted">
-          {tickets.map(t => (
+          {filtered.length === 0 && (
+            <div className="px-3 py-4 text-center text-slate-600 text-xs font-mono">
+              No {showDone ? "" : "open "}tickets.
+            </div>
+          )}
+          {filtered.map(t => (
             <div
               key={t.id}
               className={`px-3 py-2 cursor-pointer select-none transition-colors
@@ -31,8 +48,11 @@ function TicketList({ repo }: { repo: string }) {
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <span className="font-mono text-xs text-slate-600">{t.id}</span>
                 {t.status && (
-                  <span className={`text-xs font-mono
-                    ${t.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}>
+                  <span
+                    data-testid={`ticket-status-${t.status}`}
+                    className={`text-xs font-mono
+                    ${t.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}
+                  >
                     {t.status}
                   </span>
                 )}

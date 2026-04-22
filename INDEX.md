@@ -99,4 +99,22 @@ __How to support and implement features cleanly__
 - Major important design decision
 - How to support persistance and storage on backend? Use sqlite or jsonl files? Should we store everything (all activities), or just user prompt and final text activity per turn? Where to store it? I'm leaning towards storing everything in the alf repo (not per repo conversation storage). So if we use sqlite, then we need to implement a custom sqlite git merge strat (not that difficult with uuid ids in db).
 - How to extract a shared core that implementations can make use of?
-- 
+
+
+### MVP 4 - Bringing it all together
+Goal: Being able to actually use alf for SWE development. Achieve parity with nanoclaw suite for agentic SWE.
+
+Large Features:
+- Annotating. Almost every panel should support an annotation action. Basically selecting some text or element, then being able to write or speak an annotation about it. The selection + annotation gets "glued into" the current chat session, or somewhere else. A contract/interface. For example file panel, if global state has "annotation" on or something, then on selection: Send back text selection context (file path, line numbers, text selection). This is why it should be up to the individual panels to give the selection context; they have valuable info about the selection context.
+    - Top bar somewhere; 2 annotation modes (valid states: one of them on, or none): Text or Voice. 
+- Voice chat. Check out ~/nanoclaw-dev. Should be able to be used both for chat message, but also annotations. Might be easiest to just have a transcription end-point for both use cases.
+- File upload in chat. Multiple. Should not support any file ext. Just general file upload.  
+- Image attachments. Check out ~/nanoclaw-dev. On frontend, nice ux features (CTRL + V grab to paste in latest screen shot). Otherwise, should try to reuse the general file upload feature.
+- Fork chat.
+
+- Being able to save and quickly use different dashboard layouts. Want an agent focused view? Or git and tickets? Or just a large overview? Select from the dropdown (or just keyboard shortcuts, ALT + NUMBER or something).
+
+
+
+Smaller Features:
+- Make dev db in its own folder (like test). This makes room for prod db. We should also add systemctl services for prod (just like we have dev and test).
