@@ -49,6 +49,7 @@ export function GitPanel({ repo }: { repo: string }) {
 
 function DiffView() {
   const diff = useGitStore(s => s.diff);
+  const diffBase = useGitStore(s => s.diffBase);
 
   if (diff === null) return <EmptyState message="Loading…" />;
   if (!diff.trim()) return <EmptyState message="No changes" />;
@@ -57,9 +58,11 @@ function DiffView() {
   try { files = parseDiff(diff); } catch { /* malformed diff */ }
   if (files.length === 0) return <EmptyState message="No changes" />;
 
+  const commitAttr = diffBase !== "unstaged" ? diffBase : undefined;
+
   return (
     <Panel>
-      <div className="flex-1 overflow-auto alf-diff">
+      <div className="flex-1 overflow-auto alf-diff" {...(commitAttr ? { "data-alf-ctx-commit": commitAttr } : {})}>
         {files.map(({ oldRevision, newRevision, type, hunks, newPath }) => (
           <HighlightedFile
             key={`${oldRevision}-${newRevision}`}
@@ -86,7 +89,7 @@ function HighlightedFile({ type, hunks, newPath }: {
   }, [hunks, newPath]);
 
   return (
-    <div className="mb-4">
+    <div className="mb-4" data-alf-ctx-file={newPath}>
       <div className="px-3 py-1 text-xs font-mono text-slate-400 bg-alf-canvas border-b border-t border-alf-border sticky top-0 z-10">
         {newPath}
       </div>

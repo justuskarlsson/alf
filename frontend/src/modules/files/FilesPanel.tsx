@@ -122,8 +122,8 @@ function StarredSection() {
   const treeData = buildTree(included);
 
   return (
-    <CollapsibleSection title="Starred">
-      <div ref={containerRef} className="min-h-[60px] max-h-[40vh]">
+    <CollapsibleSection title="Starred" fill>
+      <div ref={containerRef} className="h-full">
         <Tree
           data={treeData}
           openByDefault={true}

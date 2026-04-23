@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
+import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
 import { useAgentsStore, AVAILABLE_IMPLS, MODEL_OPTIONS, type LiveState } from "./store";
+import { useAnnotationStore } from "../../core/annotationStore";
+import { useVoiceRecorder } from "../../core/useVoiceRecorder";
 import type { AgentActivity, AgentDelta, AgentSession, AgentTurn } from "@alf/types";
 
 // ---------------------------------------------------------------------------
@@ -193,16 +194,53 @@ function ChatView({ repo }: { repo: string }) {
     if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
   }
 
+  // Annotations
+  const annotations = useAnnotationStore(s => s.pending);
+  const removeAnnotation = useAnnotationStore(s => s.removeAnnotation);
+  const clearAnnotations = useAnnotationStore(s => s.clearPending);
+  const formatAnnotations = useAnnotationStore(s => s.formatForPrompt);
+
+  // Voice recorder for composer mic button
+  const { state: micState, duration: micDuration, start: micStart, stop: micStop } = useVoiceRecorder();
+  const micPromiseRef = useRef<ReturnType<typeof micStart> | null>(null);
+
+  async function handleMicToggle() {
+    if (micState === "recording") {
+      micStop();
+      if (micPromiseRef.current) {
+        try {
+          const rec = await micPromiseRef.current;
+          const res = await request<{ text: string }>({
+            type: "voice/transcribe",
+            audioBase64: rec.audioBase64,
+            audioFormat: rec.audioFormat,
+          });
+          if (res.text) setInput(prev => prev ? `${prev} ${res.text}` : res.text);
+        } catch (err) { console.error("Transcription failed:", err); }
+        micPromiseRef.current = null;
+      }
+    } else {
+      micPromiseRef.current = micStart();
+    }
+  }
+
   function handleSend() {
     const trimmed = input.trim();
-    if ((!trimmed && !attachedFiles.length) || isRunning || !selectedSessionId) return;
+    const hasAnnotations = annotations.length > 0;
+    if ((!trimmed && !attachedFiles.length && !hasAnnotations) || isRunning || !selectedSessionId) return;
     const files = attachedFiles.length
       ? attachedFiles.map(f => ({ name: f.name, base64: f.base64, mimeType: f.mimeType }))
       : undefined;
+    // Prepend annotations to prompt
+    const annotationText = formatAnnotations();
+    const fullPrompt = annotationText
+      ? `${annotationText}\n\n---\n\n${trimmed || "(see annotations above)"}`
+      : trimmed || "(files attached)";
     setInput("");
     for (const f of attachedFiles) { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); }
     setAttachedFiles([]);
-    sendMessage(trimmed || "(files attached)", request, files);
+    clearAnnotations();
+    sendMessage(fullPrompt, request, files);
   }
 
   if (!selectedSessionId) return <EmptyState message="Select or create a session" />;
@@ -250,11 +288,27 @@ function ChatView({ repo }: { repo: string }) {
         </div>
       </PanelHeader>
 
-      <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed">
+      <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed" data-alf-ctx-session={selectedSessionId ?? undefined}>
         <div className="flex flex-col-reverse gap-2 p-3">
           {feed.map((item, i) => <FeedItem key={i} item={item} />)}
         </div>
       </div>
+
+      {/* Annotation chips */}
+      {annotations.length > 0 && (
+        <div className="shrink-0 border-t border-alf-border px-2 py-1.5 flex flex-wrap gap-1.5" data-testid="annotation-chips">
+          {annotations.map(a => {
+            const label = a.context.attrs["ticket-id"] || a.context.attrs.file?.split("/").pop() || a.context.text.slice(0, 30);
+            return (
+              <div key={a.id} className="flex items-center gap-1 bg-purple-900/30 border border-purple-700/40 rounded px-2 py-1 text-xs font-mono text-purple-300">
+                <span className="max-w-[100px] truncate" title={a.context.text}>{label}</span>
+                <span className="text-purple-500/60 max-w-[80px] truncate" title={a.note}>{a.note.slice(0, 20)}</span>
+                <button onClick={() => removeAnnotation(a.id)} className="text-purple-600 hover:text-red-400 ml-0.5">x</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Attached files chips */}
       {attachedFiles.length > 0 && (
@@ -299,6 +353,22 @@ function ChatView({ repo }: { repo: string }) {
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
+        <button
+          onClick={handleMicToggle}
+          disabled={isRunning}
+          title={micState === "recording" ? "Stop recording" : "Voice message"}
+          data-testid="mic-btn"
+          className={`transition-colors disabled:opacity-30 px-1
+            ${micState === "recording" ? "text-red-400 animate-pulse" : "text-slate-600 hover:text-slate-300"}`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
         <textarea
           ref={inputRef}
           value={input}
@@ -315,7 +385,7 @@ function ChatView({ repo }: { repo: string }) {
         />
         <button
           onClick={handleSend}
-          disabled={isRunning || (!input.trim() && !attachedFiles.length)}
+          disabled={isRunning || (!input.trim() && !attachedFiles.length && !annotations.length)}
           className="px-3 py-1 text-xs font-mono rounded border border-alf-border text-slate-400
                      hover:text-slate-200 hover:border-slate-500 transition-colors
                      disabled:opacity-30 disabled:cursor-not-allowed"
@@ -356,7 +426,7 @@ function FeedItem({ item }: { item: FeedItemData }) {
       )}
       {isText && isFinished ? (
         <div className="prose prose-invert prose-sm max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown>
+          <MarkdownRenderer>{item.content}</MarkdownRenderer>
         </div>
       ) : (
         <span className="whitespace-pre-wrap">{item.content}</span>

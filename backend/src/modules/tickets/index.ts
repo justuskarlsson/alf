@@ -31,9 +31,11 @@ function readTicket(filePath: string): TicketFull | null {
   try {
     const raw = fs.readFileSync(filePath, "utf8");
     const { meta, body } = parseFrontmatter(raw);
+    const filename = path.basename(filePath);
     const id = path.basename(filePath, ".md"); // filename is the canonical id
     return {
       id,
+      filename,
       title: (meta.title as string) || id,
       tags: meta.tags as string[] | undefined,
       epic: meta.epic as string | undefined,

@@ -15,6 +15,25 @@ Clean minimal (incremental) refactor of ~/repos/hans , which itself is an untest
 - Use 3-layered onion design philoshopy. At the inner core, we have the data (that is persisted). This is the truth. Then we have `core`. This should be small and the human developer should know this by heart. That's why it's got to be small. Should be 10% of the code, but 90% of the execution flow should flow through this (90/10 rule). And then the rest, which should be the actual use cases and should be grouped into modules with clear boundaries. These modules should primarily use `core` to handle data, but also to reduce redundancy and keep the 90/10 rule.
 
 
+## Service Stacks
+
+Three systemd user stacks, each with relay + backend + frontend:
+
+| Stack | Target | Env file | Frontend port | Notes |
+|-------|--------|----------|---------------|-------|
+| **dev** | `alf-dev.target` | `infra/.env.dev` | 5000 | Day-to-day development |
+| **test** | `alf-test.target` | `infra/.env.test` | 5010 | E2E tests (`npx playwright test`) hit this |
+| **prod** | `alf-prod.target` | `infra/.env.prod` | 5020 | Production |
+
+**Restarting after code changes:**
+- **Frontend** (Vite): auto-reloads via HMR — no restart needed.
+- **Backend** (tsx): must restart to pick up changes. `tsx` re-reads source on start but does not watch for changes.
+  ```sh
+  systemctl --user restart alf-dev-backend.service   # dev
+  systemctl --user restart alf-test-backend.service   # test (for E2E)
+  ```
+- **Note:** `systemctl --user restart alf-test.target` may not propagate to already-running units. Restart individual services explicitly.
+
 ## Files to read
 - .alf/TICKETS.md
 

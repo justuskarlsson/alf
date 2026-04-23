@@ -21,6 +21,7 @@ export interface FilesGetResponse {
 
 export interface TicketMeta {
   id: string;
+  filename: string;
   title: string;
   tags?: string[];
   epic?: string;

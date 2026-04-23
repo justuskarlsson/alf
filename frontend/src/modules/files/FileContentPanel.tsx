@@ -68,7 +68,7 @@ export function FileContentPanel() {
       <div className="px-3 py-1.5 text-xs text-slate-500 font-mono border-b border-alf-border shrink-0 bg-alf-canvas">
         {selectedFile}
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" data-alf-ctx-file={selectedFile}>
         {html
           ? <div className="alf-shiki" dangerouslySetInnerHTML={{ __html: html }} />
           : <pre className="p-4 font-mono text-sm text-slate-300 whitespace-pre-wrap">{fileContent}</pre>

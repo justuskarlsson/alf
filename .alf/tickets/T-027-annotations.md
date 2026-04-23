@@ -2,7 +2,7 @@
 id: T-027
 title: "Annotations (text + voice)"
 type: feature
-status: open
+status: done
 priority: high
 epic: mvp4
 effort: L
@@ -64,17 +64,20 @@ Annotations accumulate as pending items, displayed as chips in the composer. On 
 
 ## Acceptance
 
-- [ ] Global selection handler: walk up DOM collecting `data-alf-ctx-*`
-- [ ] `annotationStore` with mode toggle, pending annotations, formatForPrompt
-- [ ] Top bar: Voice and Text toggle buttons
-- [ ] Text mode: selection → text input popover → annotation added
-- [ ] Voice mode: selection → record → transcribe → annotation added
-- [ ] Composer: shows pending annotation chips, removable
-- [ ] On send: annotations formatted as blockquotes, prepended to message, cleared
-- [ ] Files panel: `data-alf-ctx-*` attributes on rendered lines
-- [ ] Tickets panel: `data-alf-ctx-*` attributes on ticket content
-- [ ] Git panel: `data-alf-ctx-*` attributes on diff content
+- [x] Global selection handler: walk up DOM collecting `data-alf-ctx-*`
+- [x] `annotationStore` with mode toggle, pending annotations, formatForPrompt
+- [x] Top bar: Voice and Text toggle buttons
+- [x] Text mode: selection → text input popover → annotation added
+- [x] Voice mode: selection → record → transcribe → annotation added
+- [x] Composer: shows pending annotation chips, removable
+- [x] On send: annotations formatted as blockquotes, prepended to message, cleared
+- [x] Files panel: `data-alf-ctx-file` on content area
+- [x] Tickets panel: `data-alf-ctx-ticket-id`, `data-alf-ctx-ticket-title` on content
+- [x] Git panel: `data-alf-ctx-file` on diff file sections, `data-alf-ctx-commit` on diff view
+- [x] Mic button in composer (voice message → transcribe → fill composer)
+- [x] Agent chat feed: `data-alf-ctx-session` attribute
+- [x] E2E tests: 4 annotation tests passing (mode toggle, text annotation flow, chip removal, mic button)
 
 ## Notes
 
-<!-- Agents and humans append timestamped notes here -->
+<!-- 2026-04-23 agent --> Implemented. New files: `core/annotationStore.ts` (Zustand store), `core/AnnotationLayer.tsx` (global selection handler + popover). Mode toggles (A / mic icon) in RepoPage header center. Text mode: triple-click/select → popover with text input → Enter commits annotation. Voice mode: select → auto-record → stop → transcribe via `voice/transcribe` → annotation created. Annotation chips displayed above attached files in composer with purple styling + remove button. On send, annotations formatted as blockquotes with context refs and prepended to prompt. Mic button added to composer input area for voice-to-text messages (separate from annotation voice). `data-alf-ctx-*` DOM attributes added to FileContentPanel, TicketsPanel, GitPanel DiffView, and AgentsPanel chat feed.

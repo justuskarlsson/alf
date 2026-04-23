@@ -64,14 +64,14 @@ export class GitModule {
     }
   }
 
-  /** List files changed between a commit SHA and HEAD. */
+  /** List files changed in a single commit (sha^..sha). */
   @handle("git/commit/diff/files")
   static commitDiffFiles(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const sha = msg.sha as string | undefined;
     if (!repo || !sha) { reply({ type: "error", error: "Missing repo or sha" }); return; }
     try {
-      const raw = git(repoPath(repo), ["diff", "--name-only", `${sha}..HEAD`]);
+      const raw = git(repoPath(repo), ["diff", "--name-only", `${sha}^..${sha}`]);
       const files = raw.split("\n").filter(Boolean);
       reply({ type: "git/commit/diff/files", files, sha });
     } catch {
@@ -79,7 +79,7 @@ export class GitModule {
     }
   }
 
-  /** Unified diff for a single file between a commit SHA and HEAD. */
+  /** Unified diff for a commit (sha^..sha), optionally filtered to a single file. */
   @handle("git/commit/diff")
   static commitDiff(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
@@ -88,8 +88,8 @@ export class GitModule {
     if (!repo || !sha) { reply({ type: "error", error: "Missing repo or sha" }); return; }
     try {
       const args = file
-        ? ["diff", "--no-color", "-U5", `${sha}..HEAD`, "--", file]
-        : ["diff", "--no-color", "-U5", `${sha}..HEAD`];
+        ? ["diff", "--no-color", "-U5", `${sha}^..${sha}`, "--", file]
+        : ["diff", "--no-color", "-U5", `${sha}^..${sha}`];
       const diff = git(repoPath(repo), args);
       reply({ type: "git/commit/diff", diff, sha, file: file ?? null });
     } catch {

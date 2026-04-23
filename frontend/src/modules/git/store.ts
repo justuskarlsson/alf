@@ -74,6 +74,9 @@ export const useGitStore = create<GitStore>((set) => ({
       request<{ files: string[] }>({ type: "git/commit/diff/files", repo, sha: base })
         .then(res => set({ commitDiffFiles: res.files }))
         .catch(console.error);
+      request<{ diff: string }>({ type: "git/commit/diff", repo, sha: base })
+        .then(res => set({ diff: res.diff }))
+        .catch(console.error);
     }
   },
   loadCommitDiff: (sha, file, repo, request) => {

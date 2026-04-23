@@ -8,6 +8,8 @@ import { useRelay } from "../core/RelayProvider";
 import { useOnConnect } from "../core/useOnConnect";
 import { useGlobalStore } from "../core/globalStore";
 import { useDashboardStore, PANEL_TYPES, BUILTIN_PRESETS, type PanelInstance, type PanelType, type LayoutPreset } from "../core/dashboardStore";
+import { useAnnotationStore } from "../core/annotationStore";
+import { AnnotationLayer } from "../core/AnnotationLayer";
 import { FilesPanel } from "../modules/files/FilesPanel";
 import { TicketsPanel } from "../modules/tickets/TicketsPanel";
 import { GitPanel } from "../modules/git/GitPanel";
@@ -103,6 +105,42 @@ function PresetSelector({ activePreset, userPresets, onLoad, onSave, onDelete }:
                      border border-alf-border rounded hover:border-slate-500 select-none"
         >-</button>
       )}
+    </div>
+  );
+}
+
+function AnnotationModeToggle() {
+  const mode = useAnnotationStore(s => s.mode);
+  const setMode = useAnnotationStore(s => s.setMode);
+
+  return (
+    <div className="flex items-center gap-1 mx-auto">
+      <button
+        onClick={() => setMode("text")}
+        data-testid="annotation-text-btn"
+        className={`font-mono text-xs px-2 py-0.5 border rounded transition-colors select-none
+          ${mode === "text"
+            ? "border-slate-500 text-slate-200 bg-alf-surface"
+            : "border-alf-border text-slate-600 hover:text-slate-400 hover:border-slate-500"}`}
+        title="Text annotation mode"
+      >A</button>
+      <button
+        onClick={() => setMode("voice")}
+        data-testid="annotation-voice-btn"
+        className={`font-mono text-xs px-2 py-0.5 border rounded transition-colors select-none
+          ${mode === "voice"
+            ? "border-slate-500 text-slate-200 bg-alf-surface"
+            : "border-alf-border text-slate-600 hover:text-slate-400 hover:border-slate-500"}`}
+        title="Voice annotation mode"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
     </div>
   );
 }
@@ -203,6 +241,8 @@ export function RepoPage({ repo }: Props) {
           ))}
         </select>
 
+        <AnnotationModeToggle />
+
         <div className="ml-auto flex items-center gap-2">
           <PresetSelector
             activePreset={activePreset}
@@ -235,6 +275,8 @@ export function RepoPage({ repo }: Props) {
           </button>
         </div>
       </header>
+
+      <AnnotationLayer />
 
       {/* Dashboard */}
       <div ref={containerRef} className="flex-1 min-h-0 p-2 bg-alf-bg">

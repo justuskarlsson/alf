@@ -1,10 +1,9 @@
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
+import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
 import { useTicketsStore, type TicketMeta } from "./store";
 
 function TicketList({ repo }: { repo: string }) {
@@ -44,9 +43,8 @@ function TicketList({ repo }: { repo: string }) {
                 ${selectedTicket?.id === t.id ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
               onClick={() => selectTicket(t.id, repo, request)}
             >
-              <div className="font-mono text-sm text-slate-200 truncate">{t.title}</div>
+              <div className="font-mono text-sm text-slate-200 truncate">{t.filename}</div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span className="font-mono text-xs text-slate-600">{t.id}</span>
                 {t.status && (
                   <span
                     data-testid={`ticket-status-${t.status}`}
@@ -77,9 +75,8 @@ function TicketDetail() {
   return (
     <Panel>
       <div className="px-3 py-2 border-b border-alf-border shrink-0 bg-alf-canvas">
-        <div className="font-mono text-sm text-slate-100">{selectedTicket.title}</div>
+        <div className="font-mono text-sm text-slate-100">{selectedTicket.filename}</div>
         <div className="flex gap-2 mt-1 flex-wrap">
-          <span className="font-mono text-xs text-slate-600">{selectedTicket.id}</span>
           {selectedTicket.status && (
             <span className={`text-xs font-mono
               ${selectedTicket.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}>
@@ -94,10 +91,10 @@ function TicketDetail() {
           ))}
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-4 prose prose-invert prose-sm max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {selectedTicket.content}
-        </ReactMarkdown>
+      <div className="flex-1 overflow-auto p-4 prose prose-invert prose-sm max-w-none"
+           data-alf-ctx-ticket-id={selectedTicket.id}
+           data-alf-ctx-ticket-title={selectedTicket.title}>
+        <MarkdownRenderer>{selectedTicket.content}</MarkdownRenderer>
       </div>
     </Panel>
   );
