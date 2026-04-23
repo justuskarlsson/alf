@@ -1,7 +1,7 @@
 # Ticket Workflow
 
 Tickets are Markdown files with YAML frontmatter stored in `.alf/tickets/`.
-Active tickets live flat in that directory. Done tickets move to `.alf/tickets/done/`.
+All tickets live flat in that directory — status is tracked via the `status` field in frontmatter, not by folder.
 
 ## File format
 
@@ -12,7 +12,7 @@ Filename: `T-001-short-slug.md`
 id: T-001
 title: Fix login redirect loop
 type: bug          # bug | feature | task | research | chore
-status: open       # open | in-progress | done
+status: open       # open | in-progress | done | future
 priority: high     # critical | high | medium | low
 epic: auth         # optional grouping
 effort: M          # S | M | L | XL
@@ -40,19 +40,18 @@ Longer background, links, logs. Read this for full picture.
 
 - **YAML frontmatter is REQUIRED**: every ticket MUST have a valid YAML frontmatter block between `---` delimiters at the top of the file. The backend parser reads ONLY the frontmatter — any `## Status:` headings or other markdown outside frontmatter are IGNORED. If a ticket is missing frontmatter, it will always appear as "open" in the UI regardless of what the markdown body says.
 - **Create**: write a new file with full YAML frontmatter (id, title, type, status, priority, epic, effort, created, updated). Auto-increment id by scanning existing filenames for max `T-NNN`.
-- **Update status**: edit the `status` field IN THE YAML FRONTMATTER and update the `updated` date; move file to `done/` when status → `done`
+- **Update status**: edit the `status` field IN THE YAML FRONTMATTER and update the `updated` date.
 - **Append a note**: add a line under `## Notes` with author + ISO timestamp prefix: `<!-- 2026-04-06T12:00Z agent:xyz --> note body`
 - **List**: read filenames + first ~600 bytes (frontmatter only) of each file in `.alf/tickets/`
-- **Never delete** a ticket — move to `done/` instead
+- **Never delete** a ticket — just set `status: done`.
 
 ## Directory layout
 
 ```
 .alf/tickets/
-  T-001-fix-login-redirect.md   ← active
-  T-002-add-dark-mode.md        ← active
-  done/
-    T-000-old-closed-bug.md     ← archived
+  T-001-fix-login-redirect.md
+  T-002-add-dark-mode.md
+  T-003-old-closed-bug.md       ← status: done in frontmatter
 ```
 
 ## Frontmatter-only read (efficiency)

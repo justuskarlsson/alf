@@ -39,7 +39,7 @@ try {
 // Adapter
 // ---------------------------------------------------------------------------
 
-const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
+import { REPOS_ROOT } from "../../../core/config.js";
 // Resolve claude binary: env override → ~/.local/bin/claude (native installer default)
 const CLAUDE_BIN = process.env.CLAUDE_BINARY_PATH
   ?? `${process.env.HOME}/.local/bin/claude`;

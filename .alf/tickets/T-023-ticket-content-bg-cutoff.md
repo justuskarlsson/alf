@@ -1,24 +1,24 @@
 ---
 id: T-023
-title: Ticket content view background cuts off early
+title: Git diff content view background cuts off early
 type: bug
-status: open
+status: done
 priority: medium
-epic: tickets
+epic: git
 effort: S
 created: 2026-04-23
 updated: 2026-04-23
 ---
 
-In the ticket content/detail view, the darker background of the markdown area doesn't extend to the bottom of the panel — it cuts off where the content ends, exposing the panel background beneath.
+In the git panel diff content view, the background cuts off where the diff content ends, exposing the panel background beneath instead of filling the full height.
 
 ## Context
 
-The content container likely needs `min-h-full` or `flex-1` so the background fills the remaining vertical space regardless of content length.
+The diff content container likely needs `min-h-full` or `flex-1` so the background fills the remaining vertical space regardless of diff length.
 
 ## Acceptance
 
-- [ ] Content area background extends to the bottom of the panel
-- [ ] Still scrolls correctly when content overflows
+- [ ] Diff content area background extends to the bottom of the panel
+- [ ] Still scrolls correctly when diff content overflows
 
 ## Notes

@@ -45,33 +45,6 @@ test.describe("Dashboard", () => {
     expect(after?.y).not.toEqual(before?.y);
   });
 
-  test("preset selector switches layout", async ({ page }) => {
-    await goToRepo(page);
-    // Default is "Overview" with 4 panels
-    await expect(page.locator('[data-testid="panel-agents"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-git"]')).toBeVisible();
-
-    // Switch to "Agent Focus" — should have 2 panels (agents + files)
-    await page.locator('[data-testid="preset-selector"]').selectOption("Agent Focus");
-    await expect(page.locator('[data-testid="panel-agents"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-files"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-git"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="panel-tickets"]')).toHaveCount(0);
-
-    // Switch to "Code Review" — should have 2 panels (git + files)
-    await page.locator('[data-testid="preset-selector"]').selectOption("Code Review");
-    await expect(page.locator('[data-testid="panel-git"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-files"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-agents"]')).toHaveCount(0);
-
-    // Switch back to "Overview" — all 4 panels
-    await page.locator('[data-testid="preset-selector"]').selectOption("Overview");
-    await expect(page.locator('[data-testid="panel-agents"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-git"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-tickets"]')).toBeVisible();
-    await expect(page.locator('[data-testid="panel-files"]')).toBeVisible();
-  });
-
   test("resize a panel via its resize handle", async ({ page }) => {
     await goToRepo(page);
     await page.getByTitle("Unlock layout").click();

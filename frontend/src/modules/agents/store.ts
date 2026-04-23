@@ -44,6 +44,7 @@ interface AgentsStore {
   createSession: (repo: string, title: string, request: WsRequest) => void;
   forkSession: (request: WsRequest) => void;
   renameSession: (id: string, title: string, request: WsRequest) => void;
+  deleteSession: (id: string, request: WsRequest) => void;
   sendMessage: (prompt: string, request: WsRequest, files?: { name: string; base64: string; mimeType: string }[]) => void;
   setSelectedImpl: (impl: string) => void;
   setSelectedModel: (model: string) => void;
@@ -131,6 +132,18 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       .then(() => set(s => ({
         sessions: s.sessions.map(s => s.id === id ? { ...s, title } : s),
       })))
+      .catch(console.error);
+  },
+
+  deleteSession: (id, request) => {
+    request<{ ok: boolean }>({ type: "agent/session/delete", sessionId: id })
+      .then(() => set(s => {
+        const sessions = s.sessions.filter(sess => sess.id !== id);
+        const cleared = s.selectedSessionId === id
+          ? { selectedSessionId: null, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null }
+          : {};
+        return { sessions, ...cleared };
+      }))
       .catch(console.error);
   },
 

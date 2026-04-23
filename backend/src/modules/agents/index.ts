@@ -7,6 +7,7 @@
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { handle, push, type Reply } from "../../core/dispatch.js";
+import { ALF_DIR, REPOS_ROOT } from "../../core/config.js";
 import { initSession, runTurn, type StreamSink } from "../../core/agents/index.js";
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
 import { testImpl } from "./implementations/test.js";
@@ -134,6 +135,17 @@ export class AgentsModule {
     reply({ type: "agent/sessions/list", sessions });
   }
 
+  /** Delete a session and all associated data. */
+  @handle("agent/session/delete")
+  static deleteSession(msg: Record<string, unknown>, reply: Reply) {
+    const { sessionId } = msg as { sessionId?: string };
+    if (!sessionId) { reply({ type: "agent/session/delete", error: "sessionId required" }); return; }
+    // Clean up subscribers for this session
+    subscribers.delete(sessionId);
+    dbSessions.delete(sessionId);
+    reply({ type: "agent/session/delete", ok: true });
+  }
+
   /** Rename or update a session. */
   @handle("agent/session/update")
   static updateSession(msg: Record<string, unknown>, reply: Reply) {
@@ -178,19 +190,17 @@ function fanOut(sessionId: string, senderConnectionId: string, msg: object): voi
   for (const cid of targets) push(cid, msg);
 }
 
-const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
-
-/** Save uploaded files to .alf/uploads/{sessionId}/ in the repo. Returns saved paths. */
+/** Save uploaded files to ALF_DIR/uploads/{sessionId}/ in the repo. Returns saved paths. */
 function saveUploadedFiles(
   repoPath: string,
   sessionId: string,
   files: { name: string; base64: string; mimeType: string }[],
 ): string[] {
   const repoDir = join(REPOS_ROOT, repoPath);
-  const alfDir = join(repoDir, ".alf");
+  const alfDir = join(repoDir, ALF_DIR);
   const uploadsDir = join(alfDir, "uploads", sessionId);
 
-  // Ensure .alf structure exists
+  // Ensure alf structure exists
   mkdirSync(uploadsDir, { recursive: true });
   ensureAlfGitignore(alfDir);
 

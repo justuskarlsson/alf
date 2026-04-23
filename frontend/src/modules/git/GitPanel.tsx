@@ -62,15 +62,19 @@ function DiffView() {
 
   return (
     <Panel>
-      <div className="flex-1 overflow-auto alf-diff" {...(commitAttr ? { "data-alf-ctx-commit": commitAttr } : {})}>
-        {files.map(({ oldRevision, newRevision, type, hunks, newPath }) => (
-          <HighlightedFile
-            key={`${oldRevision}-${newRevision}`}
-            type={type}
-            hunks={hunks}
-            newPath={newPath ?? ""}
-          />
-        ))}
+      <div className="flex-1 overflow-auto alf-diff bg-alf-bg" {...(commitAttr ? { "data-alf-ctx-commit": commitAttr } : {})}>
+        {files.map(({ oldRevision, newRevision, type, hunks, oldPath, newPath }) => {
+          // Deleted files have newPath="/dev/null" — show oldPath instead
+          const displayPath = (newPath && newPath !== "/dev/null") ? newPath : (oldPath ?? "");
+          return (
+            <HighlightedFile
+              key={`${oldRevision}-${newRevision}`}
+              type={type}
+              hunks={hunks}
+              newPath={displayPath}
+            />
+          );
+        })}
       </div>
     </Panel>
   );

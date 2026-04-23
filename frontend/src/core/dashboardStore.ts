@@ -19,16 +19,6 @@ export interface PanelInstance {
   args: Record<string, string>;
 }
 
-// ---------------------------------------------------------------------------
-// Layout presets
-// ---------------------------------------------------------------------------
-
-export interface LayoutPreset {
-  name: string;
-  panels: PanelInstance[];
-  layout: Layout;
-}
-
 const INITIAL_PANELS: PanelInstance[] = [
   { id: "agents-0",  type: "agents",  args: {} },
   { id: "files-0",   type: "files",   args: {} },
@@ -43,35 +33,11 @@ const INITIAL_LAYOUT: Layout = [
   { i: "git-0",     x: 0, y:10, w:12, h: 5,  minW: 2, minH: 2 },
 ];
 
-export const BUILTIN_PRESETS: LayoutPreset[] = [
-  {
-    name: "Overview",
-    panels: INITIAL_PANELS,
-    layout: INITIAL_LAYOUT,
-  },
-  {
-    name: "Agent Focus",
-    panels: [
-      { id: "agents-0", type: "agents", args: {} },
-      { id: "files-0",  type: "files",  args: {} },
-    ],
-    layout: [
-      { i: "agents-0", x: 0, y: 0, w: 9, h: 15, minW: 3, minH: 3 },
-      { i: "files-0",  x: 9, y: 0, w: 3, h: 15, minW: 2, minH: 2 },
-    ],
-  },
-  {
-    name: "Code Review",
-    panels: [
-      { id: "git-0",   type: "git",   args: {} },
-      { id: "files-0", type: "files", args: {} },
-    ],
-    layout: [
-      { i: "git-0",   x: 0, y: 0, w: 8, h: 15, minW: 3, minH: 3 },
-      { i: "files-0", x: 8, y: 0, w: 4, h: 15, minW: 2, minH: 2 },
-    ],
-  },
-];
+export interface LayoutPreset {
+  name: string;
+  panels: PanelInstance[];
+  layout: Layout;
+}
 
 interface RepoDashboard {
   panels: PanelInstance[];
@@ -100,7 +66,6 @@ interface DashboardStore {
   loadPreset: (name: string) => void;
   savePreset: (name: string) => void;
   deletePreset: (name: string) => void;
-  getAllPresets: () => LayoutPreset[];
 }
 
 export const useDashboardStore = create<DashboardStore>()(
@@ -110,7 +75,7 @@ export const useDashboardStore = create<DashboardStore>()(
       layout: INITIAL_LAYOUT,
       freeMode: false,
       activeRepo: null,
-      activePreset: "Overview",
+      activePreset: null,
       saved: {},
       userPresets: [],
 
@@ -142,8 +107,7 @@ export const useDashboardStore = create<DashboardStore>()(
       toggleFreeMode: () => set(s => autosave(s, { freeMode: !s.freeMode })),
 
       loadPreset: (name) => {
-        const all = get().getAllPresets();
-        const preset = all.find(p => p.name === name);
+        const preset = get().userPresets.find(p => p.name === name);
         if (!preset) return;
         set(s => autosave(s, { panels: preset.panels, layout: preset.layout }, { activePreset: name }));
       },
@@ -161,8 +125,6 @@ export const useDashboardStore = create<DashboardStore>()(
         userPresets: s.userPresets.filter(p => p.name !== name),
         activePreset: s.activePreset === name ? null : s.activePreset,
       })),
-
-      getAllPresets: () => [...BUILTIN_PRESETS, ...get().userPresets],
     }),
     {
       name: "alf-dashboard",

@@ -189,6 +189,16 @@ export const dbSessions = {
   touch(id: string): void {
     getDb().prepare("UPDATE sessions SET updated_at = ? WHERE id = ?").run(Date.now(), id);
   },
+
+  /** Delete a session and all its turns + activities. */
+  delete(id: string): void {
+    const db = getDb();
+    db.prepare("DELETE FROM activities WHERE session_id = ?").run(id);
+    db.prepare("DELETE FROM turns WHERE session_id = ?").run(id);
+    // Clear forked_from references so children aren't orphaned
+    db.prepare("UPDATE sessions SET forked_from = NULL WHERE forked_from = ?").run(id);
+    db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+  },
 };
 
 // ---------------------------------------------------------------------------

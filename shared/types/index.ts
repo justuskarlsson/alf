@@ -142,3 +142,8 @@ export interface AgentSessionUpdateMsg {
   sessionId: string;
   title?: string;
 }
+
+export interface AgentSessionDeleteMsg {
+  type: "agent/session/delete";
+  sessionId: string;
+}

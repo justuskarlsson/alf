@@ -13,9 +13,17 @@ function TicketList({ repo }: { repo: string }) {
     selectedTicket: s.selectedTicket,
     selectTicket: s.selectTicket,
   })));
-  const [showDone, setShowDone] = useState(false);
+  type StatusFilter = "all" | "open" | "future" | "done";
+  const FILTERS: StatusFilter[] = ["all", "open", "future", "done"];
+  const [filter, setFilter] = useState<StatusFilter>("open");
 
-  const filtered = showDone ? tickets : tickets.filter(t => t.status !== "done");
+  const filtered = filter === "all"
+    ? tickets
+    : tickets.filter(t => (t.status ?? "open") === filter);
+
+  function cycleFilter() {
+    setFilter(f => FILTERS[(FILTERS.indexOf(f) + 1) % FILTERS.length]);
+  }
 
   if (tickets.length === 0) return <EmptyState message="No tickets." />;
 
@@ -23,17 +31,17 @@ function TicketList({ repo }: { repo: string }) {
     <Panel>
       <PanelHeader title="Tickets">
         <button
-          onClick={() => setShowDone(v => !v)}
-          data-testid="filter-show-done"
-          className={`font-mono text-xs transition-colors ${showDone ? "text-slate-300" : "text-slate-600 hover:text-slate-400"}`}
-          title={showDone ? "Hide done tickets" : "Show done tickets"}
-        >{showDone ? "hide done" : "show done"}</button>
+          onClick={cycleFilter}
+          data-testid="filter-status"
+          className={`font-mono text-xs transition-colors ${filter === "all" ? "text-slate-300" : statusColor(filter)}`}
+          title="Cycle filter: all → open → future → done"
+        >{filter}</button>
       </PanelHeader>
       <div className="flex-1 overflow-auto">
         <div className="divide-y divide-alf-muted">
           {filtered.length === 0 && (
             <div className="px-3 py-4 text-center text-slate-600 text-xs font-mono">
-              No {showDone ? "" : "open "}tickets.
+              No matching tickets.
             </div>
           )}
           {filtered.map(t => (
@@ -48,8 +56,7 @@ function TicketList({ repo }: { repo: string }) {
                 {t.status && (
                   <span
                     data-testid={`ticket-status-${t.status}`}
-                    className={`text-xs font-mono
-                    ${t.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}
+                    className={`text-xs font-mono ${statusColor(t.status)}`}
                   >
                     {t.status}
                   </span>
@@ -78,8 +85,7 @@ function TicketDetail() {
         <div className="font-mono text-sm text-slate-100">{selectedTicket.filename}</div>
         <div className="flex gap-2 mt-1 flex-wrap">
           {selectedTicket.status && (
-            <span className={`text-xs font-mono
-              ${selectedTicket.status === "open" ? "text-emerald-500/70" : "text-slate-500"}`}>
+            <span className={`text-xs font-mono ${statusColor(selectedTicket.status)}`}>
               {selectedTicket.status}
             </span>
           )}
@@ -91,7 +97,7 @@ function TicketDetail() {
           ))}
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-4 prose prose-invert prose-sm max-w-none"
+      <div className="flex-1 overflow-auto p-4 prose prose-invert prose-sm max-w-none bg-alf-bg"
            data-alf-ctx-ticket-id={selectedTicket.id}
            data-alf-ctx-ticket-title={selectedTicket.title}>
         <MarkdownRenderer>{selectedTicket.content}</MarkdownRenderer>
@@ -118,4 +124,18 @@ export function TicketsPanel({ repo }: { repo: string }) {
       main={<TicketDetail />}
     />
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function statusColor(status: string): string {
+  switch (status) {
+    case "open":        return "text-emerald-500/70";
+    case "in-progress": return "text-amber-400/70";
+    case "future":      return "text-sky-400/60";
+    case "done":        return "text-slate-500";
+    default:            return "text-slate-500";
+  }
 }

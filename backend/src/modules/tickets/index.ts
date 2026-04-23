@@ -2,9 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { TicketMeta, TicketFull } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
-
-const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
-const TICKETS_DIR = ".alf/tickets";
+import { ALF_DIR, REPOS_ROOT } from "../../core/config.js";
 
 function parseFrontmatter(raw: string): { meta: Record<string, unknown>; body: string } {
   if (!raw.startsWith("---")) return { meta: {}, body: raw };
@@ -47,7 +45,7 @@ function readTicket(filePath: string): TicketFull | null {
 }
 
 function ticketsDir(repo: string): string {
-  return path.join(REPOS_ROOT, repo, TICKETS_DIR);
+  return path.join(REPOS_ROOT, repo, ALF_DIR, "tickets");
 }
 
 function listTickets(repo: string): TicketMeta[] {

@@ -2,8 +2,7 @@ import { execSync, spawnSync } from "child_process";
 import path from "path";
 import type { Worktree, GitCommit } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
-
-const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
+import { REPOS_ROOT } from "../../core/config.js";
 
 // Handlers at top — helpers below are hoisted (function declarations).
 export class GitModule {
@@ -26,7 +25,9 @@ export class GitModule {
     try {
       // --porcelain covers modified, staged, untracked (??), deleted, etc.
       const raw = execSync("git status --porcelain", { cwd: repoPath(repo), encoding: "utf8" });
-      const files = raw.split("\n").filter(Boolean).map(line => line.slice(3).trim());
+      const files = raw.split("\n").filter(Boolean)
+        .map(line => line.slice(3).trim())
+        .filter(f => f && f !== "/dev/null");
       reply({ type: "git/changed-files", files });
     } catch {
       reply({ type: "git/changed-files", files: [] });

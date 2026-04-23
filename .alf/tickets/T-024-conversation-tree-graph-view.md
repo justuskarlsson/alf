@@ -2,7 +2,7 @@
 id: T-024
 title: "Conversation tree / graph view (future)"
 type: feature
-status: open
+status: future
 priority: low
 epic: future
 effort: XL

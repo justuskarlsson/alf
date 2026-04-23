@@ -7,7 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../core/RelayProvider";
 import { useOnConnect } from "../core/useOnConnect";
 import { useGlobalStore } from "../core/globalStore";
-import { useDashboardStore, PANEL_TYPES, BUILTIN_PRESETS, type PanelInstance, type PanelType, type LayoutPreset } from "../core/dashboardStore";
+import { useDashboardStore, PANEL_TYPES, type PanelInstance, type PanelType, type LayoutPreset } from "../core/dashboardStore";
 import { useAnnotationStore } from "../core/annotationStore";
 import { AnnotationLayer } from "../core/AnnotationLayer";
 import { FilesPanel } from "../modules/files/FilesPanel";
@@ -68,8 +68,21 @@ function PresetSelector({ activePreset, userPresets, onLoad, onSave, onDelete }:
   onSave: (name: string) => void;
   onDelete: (name: string) => void;
 }) {
-  const allPresets = [...BUILTIN_PRESETS, ...userPresets];
-  const builtinNames = new Set(BUILTIN_PRESETS.map(p => p.name));
+  if (userPresets.length === 0 && !activePreset) {
+    // No presets yet — just show the save button
+    return (
+      <button
+        onClick={() => {
+          const name = prompt("Preset name:");
+          if (name?.trim()) onSave(name.trim());
+        }}
+        title="Save current layout as preset"
+        data-testid="preset-save-btn"
+        className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors px-1.5 py-0.5
+                   border border-alf-border rounded hover:border-slate-500 select-none"
+      >save layout</button>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1">
@@ -82,7 +95,7 @@ function PresetSelector({ activePreset, userPresets, onLoad, onSave, onDelete }:
                    focus:border-slate-400 transition-colors"
       >
         {!activePreset && <option value="" style={{ background: "#161b22" }}>Custom</option>}
-        {allPresets.map((p, i) => (
+        {userPresets.map((p, i) => (
           <option key={p.name} value={p.name} style={{ background: "#161b22" }}>
             {`${i + 1}. ${p.name}`}
           </option>
@@ -94,10 +107,11 @@ function PresetSelector({ activePreset, userPresets, onLoad, onSave, onDelete }:
           if (name?.trim()) onSave(name.trim());
         }}
         title="Save current layout as preset"
+        data-testid="preset-save-btn"
         className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors px-1.5 py-0.5
                    border border-alf-border rounded hover:border-slate-500 select-none"
       >+</button>
-      {activePreset && !builtinNames.has(activePreset) && (
+      {activePreset && (
         <button
           onClick={() => onDelete(activePreset)}
           title={`Delete preset "${activePreset}"`}
@@ -186,15 +200,16 @@ export function RepoPage({ repo }: Props) {
     })));
 
   // Alt+1..9 keyboard shortcuts for preset switching
+  // Read from store directly to avoid stale closure over userPresets.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (!e.altKey || e.metaKey || e.shiftKey) return;
       const idx = parseInt(e.key) - 1;
       if (isNaN(idx) || idx < 0) return;
-      const allPresets = [...BUILTIN_PRESETS, ...userPresets];
-      if (idx < allPresets.length) {
+      const { userPresets: presets, loadPreset: load } = useDashboardStore.getState();
+      if (idx < presets.length) {
         e.preventDefault();
-        loadPreset(allPresets[idx].name);
+        load(presets[idx].name);
       }
     }
     window.addEventListener("keydown", handleKey);

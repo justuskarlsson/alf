@@ -58,8 +58,8 @@ test.describe("Agents panel", () => {
 
     // Pending prompt shown right away (before any server response)
     await expect(page.getByTestId("chat-feed")).toContainText("hello world");
-    // Input is cleared and disabled while running
-    await expect(page.getByTestId("prompt-input")).toBeDisabled();
+    // Input is cleared while running (but stays enabled for typing next message)
+    await expect(page.getByTestId("prompt-input")).toHaveValue("");
   });
 
   test("streaming — live thinking activity appears while running", async ({ page }) => {

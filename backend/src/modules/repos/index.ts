@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { handle, type Reply } from "../../core/dispatch.js";
-
-const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
+import { REPOS_ROOT } from "../../core/config.js";
 
 function isWorktree(dirPath: string): boolean {
   try {

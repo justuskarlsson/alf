@@ -61,6 +61,7 @@ function SessionRow({ session, selected, onSelect }: {
 }) {
   const { request } = useRelay();
   const renameSession = useAgentsStore(s => s.renameSession);
+  const deleteSession = useAgentsStore(s => s.deleteSession);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(session.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -87,7 +88,7 @@ function SessionRow({ session, selected, onSelect }: {
     <div
       onClick={editing ? undefined : onSelect}
       onDoubleClick={startEdit}
-      className={`px-3 py-2 cursor-pointer select-none transition-colors
+      className={`group px-3 py-2 cursor-pointer select-none transition-colors
         ${selected ? "bg-alf-surface" : "hover:bg-alf-surface/60"}`}
     >
       {editing ? (
@@ -103,7 +104,18 @@ function SessionRow({ session, selected, onSelect }: {
           data-testid="session-title-input"
         />
       ) : (
-        <div className="font-mono text-sm text-slate-200 truncate">{session.title}</div>
+        <div className="flex items-center justify-between gap-1">
+          <div className="font-mono text-sm text-slate-200 truncate">{session.title}</div>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              if (confirm(`Delete "${session.title}"?`)) deleteSession(session.id, request);
+            }}
+            title="Delete session"
+            data-testid="delete-session-btn"
+            className="opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-all text-xs px-1 shrink-0"
+          >✕</button>
+        </div>
       )}
       <div className="font-mono text-xs text-slate-600 mt-0.5">
         {new Date(session.updated_at).toLocaleDateString()}
@@ -375,13 +387,12 @@ function ChatView({ repo }: { repo: string }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           onPaste={handlePaste}
-          placeholder={isRunning ? "Waiting for response..." : "Send a message..."}
-          disabled={isRunning}
+          placeholder={isRunning ? "Waiting for response… (type your next message)" : "Send a message..."}
           rows={2}
           data-testid="prompt-input"
           className="flex-1 bg-alf-bg border border-alf-border rounded px-2 py-1 text-sm font-mono
                      text-slate-200 placeholder-slate-600 resize-none focus:outline-none
-                     focus:border-slate-500 transition-colors disabled:opacity-40"
+                     focus:border-slate-500 transition-colors"
         />
         <button
           onClick={handleSend}

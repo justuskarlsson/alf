@@ -3,8 +3,7 @@ import fs from "fs";
 import path from "path";
 import type { FileEntry } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
-
-const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
+import { ALF_DIR, REPOS_ROOT } from "../../core/config.js";
 
 // Handlers at top — helper functions below are hoisted (function declarations).
 export class FilesModule {
@@ -77,7 +76,7 @@ function listFilesGit(repoPath: string): FileEntry[] {
 // Fallback naive walk — skips common heavy dirs and dot-files/dirs
 const SKIP = new Set([".git", "node_modules", "dist", ".next", "__pycache__", ".venv"]);
 // Dot-dirs allowed in "show hidden" mode
-const DOT_ALLOW = new Set([".alf"]);
+const DOT_ALLOW = new Set([ALF_DIR]);
 
 function listFilesNaive(repoPath: string): FileEntry[] {
   const entries: FileEntry[] = [];
