@@ -12,7 +12,7 @@ import { createLogger } from "../logger.js";
 const log = createLogger("db");
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DB_PATH = join(__dir, "../../../..", "data", "alf.db");
+const DEFAULT_DB_PATH = join(__dir, "../../../..", "data", "dev", "alf.db");
 
 let _db: Database.Database | null = null;
 
@@ -46,6 +46,8 @@ export interface Session {
   title: string;
   sdk_session_id: string | null;
   impl: string;
+  forked_from: string | null;
+  fork_point_turn_idx: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -102,12 +104,62 @@ export const dbSessions = {
       title: "New session",
       sdk_session_id: null,
       impl,
+      forked_from: null,
+      fork_point_turn_idx: null,
       created_at: now,
       updated_at: now,
     };
     db.prepare(
-      "INSERT INTO sessions (id, repo_id, title, sdk_session_id, impl, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(row.id, row.repo_id, row.title, row.sdk_session_id, row.impl, row.created_at, row.updated_at);
+      "INSERT INTO sessions (id, repo_id, title, sdk_session_id, impl, forked_from, fork_point_turn_idx, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(row.id, row.repo_id, row.title, row.sdk_session_id, row.impl, row.forked_from, row.fork_point_turn_idx, row.created_at, row.updated_at);
+    return row;
+  },
+
+  /** Fork a session: create new session and copy turns + activities up to forkTurnIdx. */
+  fork(parentId: string, forkTurnIdx?: number): Session {
+    const db = getDb();
+    const parent = dbSessions.get(parentId);
+    if (!parent) throw new Error(`Session not found: ${parentId}`);
+
+    const turns = dbTurns.list(parentId);
+    const maxIdx = forkTurnIdx ?? (turns.length > 0 ? turns[turns.length - 1].idx : -1);
+
+    const now = Date.now();
+    const newId = crypto.randomUUID();
+    const row: Session = {
+      id: newId,
+      repo_id: parent.repo_id,
+      title: `Fork of ${parent.title}`,
+      sdk_session_id: parent.sdk_session_id,
+      impl: parent.impl,
+      forked_from: parentId,
+      fork_point_turn_idx: maxIdx,
+      created_at: now,
+      updated_at: now,
+    };
+    db.prepare(
+      "INSERT INTO sessions (id, repo_id, title, sdk_session_id, impl, forked_from, fork_point_turn_idx, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(row.id, row.repo_id, row.title, row.sdk_session_id, row.impl, row.forked_from, row.fork_point_turn_idx, row.created_at, row.updated_at);
+
+    // Copy turns and their activities up to the fork point
+    const turnsToCopy = turns.filter(t => t.idx <= maxIdx);
+    for (const oldTurn of turnsToCopy) {
+      const newTurnId = crypto.randomUUID();
+      db.prepare(
+        "INSERT INTO turns (id, session_id, prompt, idx, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(newTurnId, newId, oldTurn.prompt, oldTurn.idx, oldTurn.created_at, oldTurn.completed_at);
+
+      // Copy activities for this turn
+      const activities = db.prepare(
+        "SELECT * FROM activities WHERE turn_id = ? ORDER BY idx ASC"
+      ).all(oldTurn.id) as Activity[];
+      for (const act of activities) {
+        db.prepare(
+          "INSERT INTO activities (id, turn_id, session_id, type, content, idx, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(crypto.randomUUID(), newTurnId, newId, act.type, act.content, act.idx, act.created_at);
+      }
+    }
+
     return row;
   },
 
@@ -242,7 +294,7 @@ function runMigrations(db: Database.Database): void {
   const applied = new Set(
     (db.prepare("SELECT name FROM _migrations").all() as { name: string }[]).map(r => r.name)
   );
-  const files = ["001_initial.sql"];
+  const files = ["001_initial.sql", "002_fork.sql"];
   for (const file of files) {
     if (applied.has(file)) continue;
     db.exec(readFileSync(join(__dir, "migrations", file), "utf-8"));

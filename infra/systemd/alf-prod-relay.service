@@ -1,0 +1,16 @@
+[Unit]
+Description=Alf Prod — Relay
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/repos/alf/relay
+ExecStart=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/relay/node_modules/.bin/tsx src/index.ts
+EnvironmentFile=%h/repos/alf/infra/.env.prod
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=alf-prod.target

@@ -7,7 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../core/RelayProvider";
 import { useOnConnect } from "../core/useOnConnect";
 import { useGlobalStore } from "../core/globalStore";
-import { useDashboardStore, PANEL_TYPES, type PanelInstance, type PanelType } from "../core/dashboardStore";
+import { useDashboardStore, PANEL_TYPES, BUILTIN_PRESETS, type PanelInstance, type PanelType, type LayoutPreset } from "../core/dashboardStore";
 import { FilesPanel } from "../modules/files/FilesPanel";
 import { TicketsPanel } from "../modules/tickets/TicketsPanel";
 import { GitPanel } from "../modules/git/GitPanel";
@@ -59,6 +59,54 @@ function renderPanelContent(panel: PanelInstance, repo: string): ReactNode {
   }
 }
 
+function PresetSelector({ activePreset, userPresets, onLoad, onSave, onDelete }: {
+  activePreset: string | null;
+  userPresets: LayoutPreset[];
+  onLoad: (name: string) => void;
+  onSave: (name: string) => void;
+  onDelete: (name: string) => void;
+}) {
+  const allPresets = [...BUILTIN_PRESETS, ...userPresets];
+  const builtinNames = new Set(BUILTIN_PRESETS.map(p => p.name));
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={activePreset ?? ""}
+        onChange={e => { if (e.target.value) onLoad(e.target.value); }}
+        data-testid="preset-selector"
+        className="bg-alf-bg border border-alf-border rounded px-2 py-0.5 text-xs font-mono
+                   text-slate-400 cursor-pointer hover:border-slate-500 focus:outline-none
+                   focus:border-slate-400 transition-colors"
+      >
+        {!activePreset && <option value="" style={{ background: "#161b22" }}>Custom</option>}
+        {allPresets.map((p, i) => (
+          <option key={p.name} value={p.name} style={{ background: "#161b22" }}>
+            {`${i + 1}. ${p.name}`}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => {
+          const name = prompt("Preset name:");
+          if (name?.trim()) onSave(name.trim());
+        }}
+        title="Save current layout as preset"
+        className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors px-1.5 py-0.5
+                   border border-alf-border rounded hover:border-slate-500 select-none"
+      >+</button>
+      {activePreset && !builtinNames.has(activePreset) && (
+        <button
+          onClick={() => onDelete(activePreset)}
+          title={`Delete preset "${activePreset}"`}
+          className="font-mono text-xs text-slate-600 hover:text-red-400 transition-colors px-1.5 py-0.5
+                     border border-alf-border rounded hover:border-slate-500 select-none"
+        >-</button>
+      )}
+    </div>
+  );
+}
+
 // RepoPage receives repo as prop so parent can set key={repo} and force re-mount on change.
 export function RepoPage({ repo }: Props) {
   const navigate = useNavigate();
@@ -83,16 +131,37 @@ export function RepoPage({ repo }: Props) {
     repos: s.repos,
     setRepos: s.setRepos,
   })));
-  const { panels, layout, freeMode, addPanel, removePanel, setLayout, toggleFreeMode } =
+  const { panels, layout, freeMode, activePreset, userPresets, addPanel, removePanel, setLayout, toggleFreeMode, loadPreset, savePreset, deletePreset } =
     useDashboardStore(useShallow(s => ({
       panels: s.panels,
       layout: s.layout,
       freeMode: s.freeMode,
+      activePreset: s.activePreset,
+      userPresets: s.userPresets,
       addPanel: s.addPanel,
       removePanel: s.removePanel,
       setLayout: s.setLayout,
       toggleFreeMode: s.toggleFreeMode,
+      loadPreset: s.loadPreset,
+      savePreset: s.savePreset,
+      deletePreset: s.deletePreset,
     })));
+
+  // Alt+1..9 keyboard shortcuts for preset switching
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const idx = parseInt(e.key) - 1;
+      if (isNaN(idx) || idx < 0) return;
+      const allPresets = [...BUILTIN_PRESETS, ...userPresets];
+      if (idx < allPresets.length) {
+        e.preventDefault();
+        loadPreset(allPresets[idx].name);
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   // Single ResizeObserver for both width and height — fixes the 4K half-width bug.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,6 +204,13 @@ export function RepoPage({ repo }: Props) {
         </select>
 
         <div className="ml-auto flex items-center gap-2">
+          <PresetSelector
+            activePreset={activePreset}
+            userPresets={userPresets}
+            onLoad={loadPreset}
+            onSave={savePreset}
+            onDelete={deletePreset}
+          />
           {freeMode && (
             <select
               value=""

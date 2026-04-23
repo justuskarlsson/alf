@@ -42,6 +42,8 @@ export interface AgentSession {
   title: string;
   sdk_session_id: string | null;
   impl: string;
+  forked_from: string | null;
+  fork_point_turn_idx: number | null;
   created_at: number;
   updated_at: number;
 }

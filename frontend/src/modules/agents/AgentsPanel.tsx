@@ -111,11 +111,19 @@ function SessionRow({ session, selected, onSelect }: {
   );
 }
 
+interface AttachedFile {
+  id: string;
+  name: string;
+  base64: string;
+  mimeType: string;
+  previewUrl?: string;
+}
+
 function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
   const {
     selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage,
-    selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
+    forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
   } = useAgentsStore(useShallow(s => ({
     selectedSessionId: s.selectedSessionId,
     turns: s.turns,
@@ -124,6 +132,7 @@ function ChatView({ repo }: { repo: string }) {
     isRunning: s.isRunning,
     pendingPrompt: s.pendingPrompt,
     sendMessage: s.sendMessage,
+    forkSession: s.forkSession,
     selectedImpl: s.selectedImpl,
     setSelectedImpl: s.setSelectedImpl,
     selectedModel: s.selectedModel,
@@ -131,12 +140,11 @@ function ChatView({ repo }: { repo: string }) {
   })));
 
   const [input, setInput] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus input whenever _focusTrigger increments (session select/create).
-  // Subscribe directly to the store to avoid deps in useEffect.
-  // Use requestAnimationFrame to wait for React to render the input (important
-  // when ChatView transitions from EmptyState to the input form).
   useEffect(() => {
     let prev = useAgentsStore.getState()._focusTrigger;
     const unsub = useAgentsStore.subscribe((state) => {
@@ -148,21 +156,61 @@ function ChatView({ repo }: { repo: string }) {
     return unsub;
   }, []);
 
+  function addFiles(fileList: FileList | File[]) {
+    for (const file of Array.from(fileList)) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1] ?? "";
+        const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+        setAttachedFiles(prev => [...prev, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          name: file.name, base64, mimeType: file.type, previewUrl,
+        }]);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function removeFile(id: string) {
+    setAttachedFiles(prev => {
+      const removed = prev.find(f => f.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter(f => f.id !== id);
+    });
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const imageFiles = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/"));
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      addFiles(imageFiles);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  }
+
   function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed || isRunning || !selectedSessionId) return;
+    if ((!trimmed && !attachedFiles.length) || isRunning || !selectedSessionId) return;
+    const files = attachedFiles.length
+      ? attachedFiles.map(f => ({ name: f.name, base64: f.base64, mimeType: f.mimeType }))
+      : undefined;
     setInput("");
-    sendMessage(trimmed, request);
+    for (const f of attachedFiles) { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); }
+    setAttachedFiles([]);
+    sendMessage(trimmed || "(files attached)", request, files);
   }
 
   if (!selectedSessionId) return <EmptyState message="Select or create a session" />;
 
-  // Build flat activity feed, newest on top
   const feed = buildFeed(turns, activities, live, pendingPrompt);
 
   return (
     <Panel>
-      {/* Impl + model selector header */}
       <PanelHeader title="Chat">
         <div className="flex items-center gap-1.5">
           <select
@@ -189,24 +237,75 @@ function ChatView({ repo }: { repo: string }) {
               ))}
             </select>
           )}
+          {turns.length > 0 && (
+            <button
+              onClick={() => forkSession(request)}
+              disabled={isRunning}
+              title="Fork this conversation"
+              data-testid="fork-btn"
+              className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors
+                         disabled:opacity-30 px-1"
+            >fork</button>
+          )}
         </div>
       </PanelHeader>
 
-      {/* Activity feed — newest on top */}
       <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed">
         <div className="flex flex-col-reverse gap-2 p-3">
           {feed.map((item, i) => <FeedItem key={i} item={item} />)}
         </div>
       </div>
 
+      {/* Attached files chips */}
+      {attachedFiles.length > 0 && (
+        <div className="shrink-0 border-t border-alf-border px-2 py-1.5 flex flex-wrap gap-1.5" data-testid="attached-files">
+          {attachedFiles.map(f => (
+            <div key={f.id} className="flex items-center gap-1 bg-alf-surface rounded px-2 py-1 text-xs font-mono text-slate-300">
+              {f.previewUrl ? (
+                <img src={f.previewUrl} alt={f.name} className="w-6 h-6 rounded object-cover" />
+              ) : (
+                <span className="text-slate-500">{extBadge(f.name)}</span>
+              )}
+              <span className="max-w-[120px] truncate">{f.name}</span>
+              <button onClick={() => removeFile(f.id)} className="text-slate-600 hover:text-red-400 ml-0.5">x</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input */}
-      <div className="shrink-0 border-t border-alf-border p-2 flex gap-2 items-center">
+      <div
+        className="shrink-0 border-t border-alf-border p-2 flex gap-2 items-center"
+        onDrop={handleDrop}
+        onDragOver={e => e.preventDefault()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={e => { if (e.target.files?.length) { addFiles(e.target.files); e.target.value = ""; } }}
+          data-testid="file-input"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isRunning}
+          title="Attach files"
+          data-testid="attach-btn"
+          className="text-slate-600 hover:text-slate-300 transition-colors disabled:opacity-30 px-1"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+          </svg>
+        </button>
         <textarea
           ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder={isRunning ? "Waiting for response…" : "Send a message…"}
+          onPaste={handlePaste}
+          placeholder={isRunning ? "Waiting for response..." : "Send a message..."}
           disabled={isRunning}
           rows={2}
           data-testid="prompt-input"
@@ -216,7 +315,7 @@ function ChatView({ repo }: { repo: string }) {
         />
         <button
           onClick={handleSend}
-          disabled={isRunning || !input.trim()}
+          disabled={isRunning || (!input.trim() && !attachedFiles.length)}
           className="px-3 py-1 text-xs font-mono rounded border border-alf-border text-slate-400
                      hover:text-slate-200 hover:border-slate-500 transition-colors
                      disabled:opacity-30 disabled:cursor-not-allowed"
@@ -330,4 +429,10 @@ function buildFeed(
   }
 
   return items;
+}
+
+/** Extract file extension for display badge, e.g. "report.pdf" → "PDF" */
+function extBadge(name: string): string {
+  const ext = name.split(".").pop()?.toUpperCase();
+  return ext && ext !== name.toUpperCase() ? ext : "FILE";
 }

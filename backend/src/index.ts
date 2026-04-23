@@ -13,6 +13,7 @@ import "./modules/files/index.js";
 import "./modules/tickets/index.js";
 import "./modules/git/index.js";
 import "./modules/agents/index.js";
+import "./core/transcription.js";
 import { cleanupSubscriber } from "./modules/agents/index.js";
 
 const log = createLogger("backend");

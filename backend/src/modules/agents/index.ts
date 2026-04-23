@@ -4,6 +4,8 @@
  * Handlers at top. Helpers below (hoisted).
  */
 
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { handle, push, type Reply } from "../../core/dispatch.js";
 import { initSession, runTurn, type StreamSink } from "../../core/agents/index.js";
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
@@ -29,10 +31,22 @@ const DEFAULT_IMPL = process.env.DEFAULT_IMPL ?? "test";
 // ---------------------------------------------------------------------------
 
 export class AgentsModule {
-  /** Create a new empty session without sending a message. */
+  /** Create a new empty session, or fork an existing one. */
   @handle("agent/session/create")
   static createSession(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, impl = DEFAULT_IMPL } = msg as { repo?: string; impl?: string };
+    const { repo, impl = DEFAULT_IMPL, forkedFrom } = msg as {
+      repo?: string; impl?: string;
+      forkedFrom?: { sessionId: string; turnIdx?: number };
+    };
+
+    // Fork path
+    if (forkedFrom?.sessionId) {
+      const session = dbSessions.fork(forkedFrom.sessionId, forkedFrom.turnIdx);
+      reply({ type: "agent/session/create", sessionId: session.id });
+      return;
+    }
+
+    // Normal create
     if (!repo) { reply({ type: "agent/session/create", error: "repo required" }); return; }
     const sessionId = initSession(repo, impl);
     reply({ type: "agent/session/create", sessionId });
@@ -45,8 +59,9 @@ export class AgentsModule {
    */
   @handle("agent/message")
   static message(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, sessionId, prompt, impl = DEFAULT_IMPL, model } = msg as {
+    const { repo, sessionId, prompt, impl = DEFAULT_IMPL, model, files } = msg as {
       repo?: string; sessionId?: string; prompt?: string; impl?: string; model?: string;
+      files?: { name: string; base64: string; mimeType: string }[];
     };
     const connectionId = msg.connectionId as string;
 
@@ -55,13 +70,26 @@ export class AgentsModule {
     const sid = sessionId ?? (repo ? initSession(repo, impl) : null);
     if (!sid) { reply({ type: "agent/message", error: "repo or sessionId required" }); return; }
 
+    // Save uploaded files to .alf/uploads/{sessionId}/ and build prompt suffix
+    let fullPrompt = prompt;
+    if (files?.length) {
+      const session = dbSessions.get(sid);
+      const repoRow = session ? dbRepos.get(session.repo_id) : null;
+      if (repoRow) {
+        const savedPaths = saveUploadedFiles(repoRow.path, sid, files);
+        if (savedPaths.length) {
+          fullPrompt += "\n\nAttached files:\n" + savedPaths.map(p => `- ${p}`).join("\n");
+        }
+      }
+    }
+
     const implFn = IMPLS[impl] ?? testImpl;
 
     const sink: StreamSink = (delta) => {
       fanOut(sid, connectionId, { type: "agent/delta", ...delta });
     };
 
-    const { done } = runTurn(sid, prompt, implFn, sink, model);
+    const { done } = runTurn(sid, fullPrompt, implFn, sink, model);
 
     // Reply immediately — client needs sessionId to subscribe.
     // sdkSessionId is persisted to DB internally by runTurn (via session_ready event).
@@ -148,4 +176,39 @@ function fanOut(sessionId: string, senderConnectionId: string, msg: object): voi
   const subs = subscribers.get(sessionId);
   const targets = subs && subs.size > 0 ? subs : new Set([senderConnectionId]);
   for (const cid of targets) push(cid, msg);
+}
+
+const REPOS_ROOT = process.env.REPOS_ROOT ?? `${process.env.HOME}/repos`;
+
+/** Save uploaded files to .alf/uploads/{sessionId}/ in the repo. Returns saved paths. */
+function saveUploadedFiles(
+  repoPath: string,
+  sessionId: string,
+  files: { name: string; base64: string; mimeType: string }[],
+): string[] {
+  const repoDir = join(REPOS_ROOT, repoPath);
+  const alfDir = join(repoDir, ".alf");
+  const uploadsDir = join(alfDir, "uploads", sessionId);
+
+  // Ensure .alf structure exists
+  mkdirSync(uploadsDir, { recursive: true });
+  ensureAlfGitignore(alfDir);
+
+  const savedPaths: string[] = [];
+  for (const file of files) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filePath = join(uploadsDir, safeName);
+    writeFileSync(filePath, Buffer.from(file.base64, "base64"));
+    savedPaths.push(filePath);
+    log.info("File saved", { name: file.name, path: filePath });
+  }
+  return savedPaths;
+}
+
+/** Ensure .alf/.gitignore exists with uploads/ entry. */
+function ensureAlfGitignore(alfDir: string): void {
+  const gitignorePath = join(alfDir, ".gitignore");
+  if (!existsSync(gitignorePath)) {
+    writeFileSync(gitignorePath, "uploads/\n");
+  }
 }

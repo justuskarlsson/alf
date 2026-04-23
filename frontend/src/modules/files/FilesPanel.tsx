@@ -5,7 +5,7 @@ import type { FilesGetResponse } from "@alf/types";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { useRepo } from "../../core/useRepo";
-import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
+import { Panel, PanelHeader, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { FileContentPanel } from "./FileContentPanel";
 import { useFilesStore, type FileEntry } from "./store";
 
@@ -19,8 +19,9 @@ export function FilesPanel({ repo }: { repo: string }) {
     loadStarred: s.loadStarred,
   })));
   const selectedFile = useFilesStore(s => s.selectedFile);
+  const isBinary = useFilesStore(s => s.isBinary);
   const hasContent = useFilesStore(s => s.fileContent !== null);
-  const contentKey = selectedFile ? (hasContent ? selectedFile : `${selectedFile}:loading`) : "empty";
+  const contentKey = selectedFile ? (hasContent ? `${selectedFile}:${isBinary}` : `${selectedFile}:loading`) : "empty";
 
   usePanelInit((request) => {
     loadStarred(repo);
@@ -31,7 +32,7 @@ export function FilesPanel({ repo }: { repo: string }) {
     <SidebarLayout
       defaultSize={40}
       minSize={20}
-      sidebar={<FilesSidebar />}
+      sidebar={<FilesSidebar repo={repo} />}
       main={<FileContentPanel key={contentKey} />}
     />
   );
@@ -41,8 +42,13 @@ export function FilesPanel({ repo }: { repo: string }) {
 // Panels and sections
 // ---------------------------------------------------------------------------
 
-function FilesSidebar() {
+function FilesSidebar({ repo }: { repo: string }) {
+  const { request } = useRelay();
   const files = useFilesStore(s => s.files);
+  const { showHidden, setShowHidden } = useFilesStore(useShallow(s => ({
+    showHidden: s.showHidden,
+    setShowHidden: s.setShowHidden,
+  })));
   const containerRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(400);
 
@@ -58,6 +64,15 @@ function FilesSidebar() {
 
   return (
     <Panel>
+      <PanelHeader title="">
+        <button
+          onClick={() => setShowHidden(!showHidden, repo, request)}
+          title={showHidden ? "Hide gitignored files" : "Show gitignored files"}
+          data-testid="show-hidden-toggle"
+          className={`font-mono text-xs transition-colors
+            ${showHidden ? "text-slate-300" : "text-slate-600 hover:text-slate-400"}`}
+        >{showHidden ? "⦿ hidden" : "○ hidden"}</button>
+      </PanelHeader>
       <StarredSection />
       <CollapsibleSection title="Files" fill>
         <div ref={containerRef} className="h-full">
@@ -174,17 +189,22 @@ function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
 function useOpenFile() {
   const { request } = useRelay();
   const repo = useRepo();
-  const { setSelectedFile, setFileContent } = useFilesStore(useShallow(s => ({
+  const { setSelectedFile, setFileContent, setIsBinary } = useFilesStore(useShallow(s => ({
     setSelectedFile: s.setSelectedFile,
     setFileContent: s.setFileContent,
+    setIsBinary: s.setIsBinary,
   })));
 
   return (filePath: string) => {
     if (!repo) return;
     setSelectedFile(filePath);
     setFileContent(null);
+    setIsBinary(false);
     request<FilesGetResponse>({ type: "files/get", repo, path: filePath })
-      .then(res => setFileContent(res.content))
+      .then(res => {
+        setFileContent(res.content);
+        setIsBinary(res.isBinary === true);
+      })
       .catch(console.error);
   };
 }

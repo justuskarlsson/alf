@@ -19,6 +19,16 @@ export interface PanelInstance {
   args: Record<string, string>;
 }
 
+// ---------------------------------------------------------------------------
+// Layout presets
+// ---------------------------------------------------------------------------
+
+export interface LayoutPreset {
+  name: string;
+  panels: PanelInstance[];
+  layout: Layout;
+}
+
 const INITIAL_PANELS: PanelInstance[] = [
   { id: "agents-0",  type: "agents",  args: {} },
   { id: "files-0",   type: "files",   args: {} },
@@ -33,6 +43,36 @@ const INITIAL_LAYOUT: Layout = [
   { i: "git-0",     x: 0, y:10, w:12, h: 5,  minW: 2, minH: 2 },
 ];
 
+export const BUILTIN_PRESETS: LayoutPreset[] = [
+  {
+    name: "Overview",
+    panels: INITIAL_PANELS,
+    layout: INITIAL_LAYOUT,
+  },
+  {
+    name: "Agent Focus",
+    panels: [
+      { id: "agents-0", type: "agents", args: {} },
+      { id: "files-0",  type: "files",  args: {} },
+    ],
+    layout: [
+      { i: "agents-0", x: 0, y: 0, w: 9, h: 15, minW: 3, minH: 3 },
+      { i: "files-0",  x: 9, y: 0, w: 3, h: 15, minW: 2, minH: 2 },
+    ],
+  },
+  {
+    name: "Code Review",
+    panels: [
+      { id: "git-0",   type: "git",   args: {} },
+      { id: "files-0", type: "files", args: {} },
+    ],
+    layout: [
+      { i: "git-0",   x: 0, y: 0, w: 8, h: 15, minW: 3, minH: 3 },
+      { i: "files-0", x: 8, y: 0, w: 4, h: 15, minW: 2, minH: 2 },
+    ],
+  },
+];
+
 interface RepoDashboard {
   panels: PanelInstance[];
   layout: Layout;
@@ -45,14 +85,22 @@ interface DashboardStore {
   layout: Layout;
   freeMode: boolean;
   activeRepo: string | null;
+  activePreset: string | null;
   // Per-repo saved dashboards (persisted to localStorage)
   saved: Record<string, RepoDashboard>;
+  // User-created presets (persisted to localStorage)
+  userPresets: LayoutPreset[];
   // Actions
   initForRepo: (repo: string) => void;
   addPanel: (type: PanelType) => void;
   removePanel: (id: string) => void;
   setLayout: (layout: Layout) => void;
   toggleFreeMode: () => void;
+  // Preset actions
+  loadPreset: (name: string) => void;
+  savePreset: (name: string) => void;
+  deletePreset: (name: string) => void;
+  getAllPresets: () => LayoutPreset[];
 }
 
 export const useDashboardStore = create<DashboardStore>()(
@@ -62,7 +110,9 @@ export const useDashboardStore = create<DashboardStore>()(
       layout: INITIAL_LAYOUT,
       freeMode: false,
       activeRepo: null,
+      activePreset: "Overview",
       saved: {},
+      userPresets: [],
 
       initForRepo: (repo) => {
         const saved = get().saved[repo];
@@ -78,29 +128,51 @@ export const useDashboardStore = create<DashboardStore>()(
         const id = `${type}-${Date.now()}`;
         const panels = [...s.panels, { id, type, args: {} }];
         const layout = [...s.layout, { i: id, x: 0, y: 0, w: 4, h: 5, minW: 2, minH: 2 }];
-        return autosave(s, { panels, layout });
+        return autosave(s, { panels, layout }, { activePreset: null });
       }),
 
       removePanel: (id) => set(s => {
         const panels = s.panels.filter(p => p.id !== id);
         const layout  = s.layout.filter(l => l.i !== id);
-        return autosave(s, { panels, layout });
+        return autosave(s, { panels, layout }, { activePreset: null });
       }),
 
       setLayout: (layout) => set(s => autosave(s, { layout })),
 
       toggleFreeMode: () => set(s => autosave(s, { freeMode: !s.freeMode })),
+
+      loadPreset: (name) => {
+        const all = get().getAllPresets();
+        const preset = all.find(p => p.name === name);
+        if (!preset) return;
+        set(s => autosave(s, { panels: preset.panels, layout: preset.layout }, { activePreset: name }));
+      },
+
+      savePreset: (name) => set(s => {
+        const preset: LayoutPreset = { name, panels: s.panels, layout: s.layout };
+        const existing = s.userPresets.findIndex(p => p.name === name);
+        const userPresets = [...s.userPresets];
+        if (existing >= 0) userPresets[existing] = preset;
+        else userPresets.push(preset);
+        return { userPresets, activePreset: name };
+      }),
+
+      deletePreset: (name) => set(s => ({
+        userPresets: s.userPresets.filter(p => p.name !== name),
+        activePreset: s.activePreset === name ? null : s.activePreset,
+      })),
+
+      getAllPresets: () => [...BUILTIN_PRESETS, ...get().userPresets],
     }),
     {
       name: "alf-dashboard",
-      // Only persist the saved record, not the transient active session.
-      partialize: s => ({ saved: s.saved }),
+      partialize: s => ({ saved: s.saved, userPresets: s.userPresets }),
     }
   )
 );
 
 // Merge patch into current session and auto-save to the active repo's slot.
-function autosave(s: DashboardStore, patch: Partial<RepoDashboard>): Partial<DashboardStore> {
+function autosave(s: DashboardStore, patch: Partial<RepoDashboard>, extra: Partial<DashboardStore> = {}): Partial<DashboardStore> {
   const session: RepoDashboard = {
     panels:   patch.panels   ?? s.panels,
     layout:   patch.layout   ?? s.layout,
@@ -109,5 +181,5 @@ function autosave(s: DashboardStore, patch: Partial<RepoDashboard>): Partial<Das
   const saved = s.activeRepo
     ? { ...s.saved, [s.activeRepo]: session }
     : s.saved;
-  return { ...session, saved };
+  return { ...session, saved, ...extra };
 }

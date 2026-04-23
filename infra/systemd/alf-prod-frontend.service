@@ -1,0 +1,16 @@
+[Unit]
+Description=Alf Prod — Frontend
+After=alf-prod-relay.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/repos/alf/frontend
+ExecStart=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/frontend/node_modules/.bin/vite
+EnvironmentFile=%h/repos/alf/infra/.env.prod
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=alf-prod.target

@@ -108,7 +108,7 @@ Large Features:
 - Annotating. Almost every panel should support an annotation action. Basically selecting some text or element, then being able to write or speak an annotation about it. The selection + annotation gets "glued into" the current chat session, or somewhere else. A contract/interface. For example file panel, if global state has "annotation" on or something, then on selection: Send back text selection context (file path, line numbers, text selection). This is why it should be up to the individual panels to give the selection context; they have valuable info about the selection context.
     - Top bar somewhere; 2 annotation modes (valid states: one of them on, or none): Text or Voice. 
 - Voice chat. Check out ~/nanoclaw-dev. Should be able to be used both for chat message, but also annotations. Might be easiest to just have a transcription end-point for both use cases.
-- File upload in chat. Multiple. Should not support any file ext. Just general file upload.  
+- File upload in chat. Multiple. Should support any file ext. Just general file upload.  
 - Image attachments. Check out ~/nanoclaw-dev. On frontend, nice ux features (CTRL + V grab to paste in latest screen shot). Otherwise, should try to reuse the general file upload feature.
 - Fork chat.
 

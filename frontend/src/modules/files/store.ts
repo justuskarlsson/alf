@@ -13,6 +13,10 @@ interface FilesStore {
   setSelectedFile: (path: string | null) => void;
   fileContent: string | null;
   setFileContent: (content: string | null) => void;
+  isBinary: boolean;
+  setIsBinary: (v: boolean) => void;
+  showHidden: boolean;
+  setShowHidden: (v: boolean, repo: string, request: WsRequest) => void;
   starred: string[];
   loadStarred: (repo: string) => void;
   star: (repo: string, path: string) => void;
@@ -27,6 +31,15 @@ export const useFilesStore = create<FilesStore>((set) => ({
   setSelectedFile: (path) => set({ selectedFile: path }),
   fileContent: null,
   setFileContent: (content) => set({ fileContent: content }),
+  isBinary: false,
+  setIsBinary: (v) => set({ isBinary: v }),
+  showHidden: false,
+  setShowHidden: (v, repo, request) => {
+    set({ showHidden: v });
+    request<{ files: FileEntry[] }>({ type: "files/list", repo, showHidden: v })
+      .then(res => set({ files: res.files }))
+      .catch(console.error);
+  },
   starred: [],
   loadStarred: (repo) => set({ starred: storage.get<string[]>(`starred:${repo}`) ?? [] }),
   star: (repo, filePath) => set((s) => {
@@ -41,8 +54,9 @@ export const useFilesStore = create<FilesStore>((set) => ({
     return { starred };
   }),
   listFiles: (repo, request) => {
-    set({ files: [], selectedFile: null, fileContent: null });
-    request<{ files: FileEntry[] }>({ type: "files/list", repo })
+    const showHidden = useFilesStore.getState().showHidden;
+    set({ files: [], selectedFile: null, fileContent: null, isBinary: false });
+    request<{ files: FileEntry[] }>({ type: "files/list", repo, showHidden })
       .then(res => set({ files: res.files }))
       .catch(console.error);
   },

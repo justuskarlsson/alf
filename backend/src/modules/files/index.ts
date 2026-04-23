@@ -11,8 +11,9 @@ export class FilesModule {
   @handle("files/list")
   static list(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
+    const showHidden = msg.showHidden === true;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
-    reply({ type: "files/list", files: listFiles(repo) });
+    reply({ type: "files/list", files: listFiles(repo, !showHidden) });
   }
 
   @handle("files/get")
@@ -75,6 +76,8 @@ function listFilesGit(repoPath: string): FileEntry[] {
 
 // Fallback naive walk — skips common heavy dirs and dot-files/dirs
 const SKIP = new Set([".git", "node_modules", "dist", ".next", "__pycache__", ".venv"]);
+// Dot-dirs allowed in "show hidden" mode
+const DOT_ALLOW = new Set([".alf"]);
 
 function listFilesNaive(repoPath: string): FileEntry[] {
   const entries: FileEntry[] = [];
@@ -82,7 +85,8 @@ function listFilesNaive(repoPath: string): FileEntry[] {
     let items: fs.Dirent[];
     try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const item of items.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (SKIP.has(item.name) || item.name.startsWith(".")) continue;
+      if (SKIP.has(item.name)) continue;
+      if (item.name.startsWith(".") && !DOT_ALLOW.has(item.name)) continue;
       const itemRel = rel ? `${rel}/${item.name}` : item.name;
       entries.push({ name: item.name, path: itemRel, isDir: item.isDirectory() });
       if (item.isDirectory()) walk(path.join(dir, item.name), itemRel);

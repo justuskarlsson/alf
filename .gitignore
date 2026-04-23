@@ -4,9 +4,8 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-data/alf.db
-data/alf.db-wal
-data/alf.db-shm
+data/dev/
+data/prod/
 data/test/alf-test.db
 data/test/alf-test.db-wal
 data/test/alf-test.db-shm

@@ -42,8 +42,9 @@ interface AgentsStore {
   loadSessions: (repo: string, request: WsRequest) => void;
   selectSession: (id: string, request: WsRequest) => void;
   createSession: (repo: string, title: string, request: WsRequest) => void;
+  forkSession: (request: WsRequest) => void;
   renameSession: (id: string, title: string, request: WsRequest) => void;
-  sendMessage: (prompt: string, request: WsRequest) => void;
+  sendMessage: (prompt: string, request: WsRequest, files?: { name: string; base64: string; mimeType: string }[]) => void;
   setSelectedImpl: (impl: string) => void;
   setSelectedModel: (model: string) => void;
   appendDelta: (delta: AgentDelta) => void;
@@ -95,6 +96,28 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         const stub: AgentSession = {
           id: res.sessionId, repo_id: "", title: finalTitle,
           sdk_session_id: null, impl,
+          forked_from: null, fork_point_turn_idx: null,
+          created_at: Date.now(), updated_at: Date.now(),
+        };
+        set(s => ({ sessions: [stub, ...s.sessions] }));
+        get().selectSession(res.sessionId, request);
+      })
+      .catch(console.error);
+  },
+
+  forkSession: (request) => {
+    const sid = get().selectedSessionId;
+    if (!sid || get().isRunning) return;
+    request<{ sessionId: string }>({
+      type: "agent/session/create",
+      forkedFrom: { sessionId: sid },
+    })
+      .then(res => {
+        const parent = get().sessions.find(s => s.id === sid);
+        const stub: AgentSession = {
+          id: res.sessionId, repo_id: parent?.repo_id ?? "", title: `Fork of ${parent?.title ?? "session"}`,
+          sdk_session_id: null, impl: parent?.impl ?? get().selectedImpl,
+          forked_from: sid, fork_point_turn_idx: null,
           created_at: Date.now(), updated_at: Date.now(),
         };
         set(s => ({ sessions: [stub, ...s.sessions] }));
@@ -111,7 +134,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       .catch(console.error);
   },
 
-  sendMessage: (prompt, request) => {
+  sendMessage: (prompt, request, files) => {
     const sid = get().selectedSessionId;
     if (!sid || get().isRunning) return;
     const impl = get().selectedImpl;
@@ -119,6 +142,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     set({ isRunning: true, pendingPrompt: prompt, live: null });
     request<{ sessionId: string; status: string }>({
       type: "agent/message", sessionId: sid, prompt, impl, model,
+      ...(files?.length ? { files } : {}),
     }).catch(console.error);
     // Actual response content arrives via agent/delta push → appendDelta
   },

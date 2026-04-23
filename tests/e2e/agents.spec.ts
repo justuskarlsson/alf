@@ -326,6 +326,64 @@ test.describe("Agents panel", () => {
 
   // ── Persistence ─────────────────────────────────────────────────────────────
 
+  test("attach file button and file chips appear in composer", async ({ page }) => {
+    await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
+
+    // Verify attach button is visible
+    await expect(page.getByTestId("attach-btn")).toBeVisible();
+
+    // Upload a file via the hidden file input
+    const fileInput = page.getByTestId("file-input");
+    await fileInput.setInputFiles({
+      name: "test-doc.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Hello from test file"),
+    });
+
+    // File chip should appear
+    await expect(page.getByTestId("attached-files")).toBeVisible();
+    await expect(page.getByTestId("attached-files")).toContainText("test-doc.txt");
+
+    // Take screenshot to verify visual
+    await page.screenshot({ path: "test-results/file-upload-chip.png" });
+
+    // Send message with file attached
+    await page.getByTestId("prompt-input").fill("check this file");
+    await page.getByRole("button", { name: "send" }).click();
+
+    // Wait for response — test impl echoes prompt which includes "Attached files:" appended by backend
+    await expect(page.getByTestId("chat-feed")).toContainText("Echo:", { timeout: 10_000 });
+
+    // Chips should be cleared after send
+    await expect(page.getByTestId("attached-files")).toHaveCount(0);
+
+    // Take screenshot of completed turn
+    await page.screenshot({ path: "test-results/file-upload-sent.png" });
+  });
+
+  test("fork button creates new session with copied history", async ({ page }) => {
+    // Create a session and send a message
+    await page.getByTestId("new-session-btn").click();
+    await selectTestImpl(page);
+    await page.getByTestId("prompt-input").fill("original message");
+    await page.getByRole("button", { name: "send" }).click();
+    await expect(page.getByTestId("chat-feed")).toContainText("Echo: original message", { timeout: 10_000 });
+
+    // Fork button should be visible (session has turns)
+    const forkBtn = page.getByTestId("fork-btn");
+    await expect(forkBtn).toBeVisible();
+    await forkBtn.click();
+
+    // New session should appear in list with "Fork of" title
+    await expect(page.getByTestId("session-list")).toContainText("Fork of", { timeout: 5000 });
+
+    // Forked session should have the copied history
+    await expect(page.getByTestId("chat-feed")).toContainText("Echo: original message", { timeout: 5000 });
+
+    await page.screenshot({ path: "test-results/fork-session.png" });
+  });
+
   test("session and history persist after page reload", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
     await selectTestImpl(page);
