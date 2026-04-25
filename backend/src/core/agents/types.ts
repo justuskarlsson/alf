@@ -31,6 +31,7 @@ export type ImplFn = (
   prompt: string,
   ctx: ImplContext,
   emit: (event: ActivityEvent) => void,
+  signal?: AbortSignal,
 ) => Promise<{ sdkSessionId?: string }>;
 
 /** A live delta forwarded to stream subscribers. */

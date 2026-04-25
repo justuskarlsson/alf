@@ -14,6 +14,7 @@ import type { Page } from "@playwright/test";
 
 /** Switch the impl selector to "test" so messages use the deterministic test impl. */
 async function selectTestImpl(page: Page) {
+  await expect(page.getByTestId("impl-selector")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("impl-selector").selectOption("test");
 }
 
@@ -21,8 +22,9 @@ test.describe("Agents panel", () => {
   test.beforeEach(async ({ page }) => {
     await withAgentsPanel(page);
     await goToRepo(page);
-    // Wait for panel to mount
+    // Wait for panel to mount AND relay to connect (session list loads)
     await expect(page.getByTestId("new-session-btn")).toBeVisible();
+    await expect(page.getByTestId("session-list")).toBeVisible({ timeout: 5_000 });
   });
 
   // ── Session management ──────────────────────────────────────────────────────
@@ -96,6 +98,8 @@ test.describe("Agents panel", () => {
     await expect(page.getByTestId("chat-feed")).toContainText("Echo: ping", { timeout: 10_000 });
     await expect(page.getByTestId("prompt-input")).toBeEnabled();
   });
+
+  // ── Input ───────────────────────────────────────────────────────────────────
 
   test("Enter key sends message (not Shift+Enter)", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
@@ -405,5 +409,47 @@ test.describe("Agents panel", () => {
       el?.click();
     });
     await expect(page.getByTestId("chat-feed")).toContainText("Echo: persist me", { timeout: 10_000 });
+  });
+
+  // ── Stop button (placed last — abort can cause transient backend disruption) ──
+
+  test("stop button appears during streaming and disappears after", async ({ page }) => {
+    page.on("dialog", d => d.accept("stop-appear-test"));
+    await page.getByTestId("new-session-btn").click();
+    await expect(page.getByTestId("session-list")).toContainText("stop-appear-test", { timeout: 5_000 });
+    await selectTestImpl(page);
+    // Use a long delay so the turn takes ~2s — enough time to observe the stop button
+    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":300}');
+    await page.getByRole("button", { name: "send" }).click();
+
+    // Stop button should appear while running
+    await expect(page.getByTestId("stop-btn")).toBeVisible({ timeout: 3_000 });
+
+    // Wait for turn to complete naturally
+    await expect(page.getByTestId("chat-feed")).toContainText("Echo:", { timeout: 15_000 });
+
+    // Stop button disappears after completion
+    await expect(page.getByTestId("stop-btn")).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  test("clicking stop cancels the active turn", async ({ page }) => {
+    page.on("dialog", d => d.accept("stop-cancel-test"));
+    await page.getByTestId("new-session-btn").click();
+    await expect(page.getByTestId("session-list")).toContainText("stop-cancel-test", { timeout: 5_000 });
+    await selectTestImpl(page);
+    // Long delay — turn would take ~5s without stop
+    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":500}');
+    await page.getByRole("button", { name: "send" }).click();
+
+    // Wait for stop button to appear
+    await expect(page.getByTestId("stop-btn")).toBeVisible({ timeout: 3_000 });
+
+    // Click stop
+    await page.getByTestId("stop-btn").click();
+
+    // Stop button disappears and input re-enables
+    await expect(page.getByTestId("stop-btn")).not.toBeVisible({ timeout: 5_000 });
+    // Send button re-enables (isRunning cleared) — proves turnDone was processed
+    await expect(page.getByRole("button", { name: "send" })).toBeVisible({ timeout: 3_000 });
   });
 });

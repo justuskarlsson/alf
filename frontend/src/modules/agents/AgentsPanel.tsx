@@ -136,7 +136,7 @@ function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
   const {
     selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage,
-    forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
+    stopSession, forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
   } = useAgentsStore(useShallow(s => ({
     selectedSessionId: s.selectedSessionId,
     turns: s.turns,
@@ -145,6 +145,7 @@ function ChatView({ repo }: { repo: string }) {
     isRunning: s.isRunning,
     pendingPrompt: s.pendingPrompt,
     sendMessage: s.sendMessage,
+    stopSession: s.stopSession,
     forkSession: s.forkSession,
     selectedImpl: s.selectedImpl,
     setSelectedImpl: s.setSelectedImpl,
@@ -215,13 +216,18 @@ function ChatView({ repo }: { repo: string }) {
   // Voice recorder for composer mic button
   const { state: micState, duration: micDuration, start: micStart, stop: micStop } = useVoiceRecorder();
   const micPromiseRef = useRef<ReturnType<typeof micStart> | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   async function handleMicToggle() {
     if (micState === "recording") {
       micStop();
-      if (micPromiseRef.current) {
+      // Capture and clear the promise ref immediately to avoid race with next recording
+      const promise = micPromiseRef.current;
+      micPromiseRef.current = null;
+      if (promise) {
+        setIsTranscribing(true);
         try {
-          const rec = await micPromiseRef.current;
+          const rec = await promise;
           const res = await request<{ text: string }>({
             type: "voice/transcribe",
             audioBase64: rec.audioBase64,
@@ -229,7 +235,7 @@ function ChatView({ repo }: { repo: string }) {
           });
           if (res.text) setInput(prev => prev ? `${prev} ${res.text}` : res.text);
         } catch (err) { console.error("Transcription failed:", err); }
-        micPromiseRef.current = null;
+        setIsTranscribing(false);
       }
     } else {
       micPromiseRef.current = micStart();
@@ -367,19 +373,29 @@ function ChatView({ repo }: { repo: string }) {
         </button>
         <button
           onClick={handleMicToggle}
-          disabled={isRunning}
-          title={micState === "recording" ? "Stop recording" : "Voice message"}
+          disabled={isRunning || isTranscribing}
+          title={isTranscribing ? "Transcribing..." : micState === "recording" ? "Stop recording" : "Voice message"}
           data-testid="mic-btn"
           className={`transition-colors disabled:opacity-30 px-1
-            ${micState === "recording" ? "text-red-400 animate-pulse" : "text-slate-600 hover:text-slate-300"}`}
+            ${isTranscribing ? "text-amber-400 animate-pulse" : ""}
+            ${micState === "recording" ? "text-red-400 animate-pulse" : ""}
+            ${!isTranscribing && micState !== "recording" ? "text-slate-600 hover:text-slate-300" : ""}`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
+          {isTranscribing ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          )}
         </button>
         <textarea
           ref={inputRef}
@@ -394,13 +410,28 @@ function ChatView({ repo }: { repo: string }) {
                      text-slate-200 placeholder-slate-600 resize-none focus:outline-none
                      focus:border-slate-500 transition-colors"
         />
-        <button
-          onClick={handleSend}
-          disabled={isRunning || (!input.trim() && !attachedFiles.length && !annotations.length)}
-          className="px-3 py-1 text-xs font-mono rounded border border-alf-border text-slate-400
-                     hover:text-slate-200 hover:border-slate-500 transition-colors
-                     disabled:opacity-30 disabled:cursor-not-allowed"
-        >send</button>
+        <div className="flex flex-col gap-1 items-center">
+          <button
+            onClick={handleSend}
+            disabled={isRunning || (!input.trim() && !attachedFiles.length && !annotations.length)}
+            className="px-3 py-1 text-xs font-mono rounded border border-alf-border text-slate-400
+                       hover:text-slate-200 hover:border-slate-500 transition-colors
+                       disabled:opacity-30 disabled:cursor-not-allowed"
+          >send</button>
+          {isRunning && (
+            <button
+              onClick={() => stopSession(request)}
+              data-testid="stop-btn"
+              title="Stop generation"
+              className="px-2 py-0.5 text-xs font-mono rounded border border-red-900/50 text-red-400/70
+                         hover:text-red-300 hover:border-red-700 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </Panel>
   );

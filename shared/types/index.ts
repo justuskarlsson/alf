@@ -147,3 +147,8 @@ export interface AgentSessionDeleteMsg {
   type: "agent/session/delete";
   sessionId: string;
 }
+
+export interface AgentStopMsg {
+  type: "agent/stop";
+  sessionId: string;
+}

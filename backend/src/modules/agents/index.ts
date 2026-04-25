@@ -20,6 +20,9 @@ const log = createLogger("agents");
 /** sessionId → Set of subscriber connectionIds. */
 const subscribers = new Map<string, Set<string>>();
 
+/** sessionId → AbortController for the currently running turn. */
+const runningTurns = new Map<string, AbortController>();
+
 const IMPLS: Record<string, ImplFn> = {
   test: testImpl,
   "claude-code": claudeCodeImpl,
@@ -90,7 +93,10 @@ export class AgentsModule {
       fanOut(sid, connectionId, { type: "agent/delta", ...delta });
     };
 
-    const { done } = runTurn(sid, fullPrompt, implFn, sink, model);
+    const abort = new AbortController();
+    runningTurns.set(sid, abort);
+
+    const { done } = runTurn(sid, fullPrompt, implFn, sink, model, abort.signal);
 
     // Reply immediately — client needs sessionId to subscribe.
     // sdkSessionId is persisted to DB internally by runTurn (via session_ready event).
@@ -99,9 +105,15 @@ export class AgentsModule {
     done
       .then(() => fanOut(sid, connectionId, { type: "agent/turn/done", sessionId: sid }))
       .catch((err) => {
+        // Aborted turns are expected — still send turn/done so frontend clears isRunning
+        if (abort.signal.aborted) {
+          fanOut(sid, connectionId, { type: "agent/turn/done", sessionId: sid });
+          return;
+        }
         log.error("runTurn failed", { error: String(err), sessionId: sid });
         push(connectionId, { type: "agent/error", sessionId: sid, error: String(err) });
-      });
+      })
+      .finally(() => runningTurns.delete(sid));
   }
 
   /** Subscribe to live deltas for a session. */
@@ -144,6 +156,20 @@ export class AgentsModule {
     subscribers.delete(sessionId);
     dbSessions.delete(sessionId);
     reply({ type: "agent/session/delete", ok: true });
+  }
+
+  /** Stop a running turn for a session. */
+  @handle("agent/stop")
+  static stop(msg: Record<string, unknown>, reply: Reply) {
+    const { sessionId } = msg as { sessionId?: string };
+    if (!sessionId) { reply({ type: "agent/stop", error: "sessionId required" }); return; }
+    const abort = runningTurns.get(sessionId);
+    if (abort) {
+      abort.abort(new Error("User stopped the turn"));
+      runningTurns.delete(sessionId);
+      log.info("Turn stopped", { sessionId });
+    }
+    reply({ type: "agent/stop", ok: true });
   }
 
   /** Rename or update a session. */

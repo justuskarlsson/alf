@@ -32,7 +32,7 @@ function parsePrompt(raw: string): { path: string; delay: number } {
   }
 }
 
-export const testImpl: ImplFn = async (prompt, ctx, emit) => {
+export const testImpl: ImplFn = async (prompt, ctx, emit, signal) => {
   const { path, delay: DELAY } = parsePrompt(prompt);
 
   if (path === "error") {
@@ -42,7 +42,7 @@ export const testImpl: ImplFn = async (prompt, ctx, emit) => {
   if (path === "think-only") {
     emit({ event: "activity_start", activityType: "thinking" });
     const content = "Thinking only.";
-    await sleep(DELAY);
+    await sleep(DELAY, signal);
     emit({ event: "activity_delta", activityType: "thinking", content });
     emit({ event: "activity_end", activityType: "thinking", content });
     emit({ event: "turn_done" });
@@ -56,7 +56,7 @@ export const testImpl: ImplFn = async (prompt, ctx, emit) => {
   const thinkingChunks = ["Analysing the request...", " Forming a plan.", " Ready."];
   let thinking = "";
   for (const chunk of thinkingChunks) {
-    await sleep(DELAY);
+    await sleep(DELAY, signal);
     thinking += chunk;
     emit({ event: "activity_delta", activityType: "thinking", content: chunk });
   }
@@ -65,7 +65,7 @@ export const testImpl: ImplFn = async (prompt, ctx, emit) => {
   // 2. Tool use (fake read)
   emit({ event: "activity_start", activityType: "tool" });
   const toolContent = `read_file: ${ctx.repo}/README.md`;
-  await sleep(DELAY);
+  await sleep(DELAY, signal);
   emit({ event: "activity_delta", activityType: "tool", content: toolContent });
   emit({ event: "activity_end", activityType: "tool", content: toolContent });
 
@@ -74,7 +74,7 @@ export const testImpl: ImplFn = async (prompt, ctx, emit) => {
   const words = `Echo: ${prompt}`.split(" ");
   let text = "";
   for (const word of words) {
-    await sleep(DELAY);
+    await sleep(DELAY, signal);
     const chunk = (text ? " " : "") + word;
     text += chunk;
     emit({ event: "activity_delta", activityType: "text", content: chunk });
@@ -88,6 +88,10 @@ export const testImpl: ImplFn = async (prompt, ctx, emit) => {
 
 // ---------------------------------------------------------------------------
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+  });
 }

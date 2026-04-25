@@ -46,6 +46,7 @@ interface AgentsStore {
   renameSession: (id: string, title: string, request: WsRequest) => void;
   deleteSession: (id: string, request: WsRequest) => void;
   sendMessage: (prompt: string, request: WsRequest, files?: { name: string; base64: string; mimeType: string }[]) => void;
+  stopSession: (request: WsRequest) => void;
   setSelectedImpl: (impl: string) => void;
   setSelectedModel: (model: string) => void;
   appendDelta: (delta: AgentDelta) => void;
@@ -65,7 +66,21 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   selectedModel: "claude-opus-4-6",
 
   loadSessions: (repo, request) => {
-    set({ sessions: [] });
+    // Unsubscribe from the previously selected session (may be from a different repo)
+    const prev = get().selectedSessionId;
+    if (prev) {
+      request<AgentUnsubscribeMsg>({ type: "agent/unsubscribe", sessionId: prev }).catch(console.error);
+    }
+    // Clear all session-specific state so stale data from old repo doesn't leak
+    set({
+      sessions: [],
+      selectedSessionId: null,
+      turns: [],
+      activities: [],
+      live: null,
+      isRunning: false,
+      pendingPrompt: null,
+    });
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
       .then(res => set({ sessions: res.sessions }))
       .catch(console.error);
@@ -158,6 +173,13 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       ...(files?.length ? { files } : {}),
     }).catch(console.error);
     // Actual response content arrives via agent/delta push → appendDelta
+  },
+
+  stopSession: (request) => {
+    const sid = get().selectedSessionId;
+    if (!sid || !get().isRunning) return;
+    request<{ ok: boolean }>({ type: "agent/stop", sessionId: sid }).catch(console.error);
+    // turnDone will be triggered by the server via agent/turn/done push
   },
 
   setSelectedImpl: (impl) => {

@@ -50,12 +50,13 @@ export function runTurn(
   impl: ImplFn,
   sink: StreamSink,
   model?: string,
+  signal?: AbortSignal,
 ): TurnHandle {
   let resolveSessionReady!: (v: string | undefined) => void;
   const sessionReady = new Promise<string | undefined>(r => { resolveSessionReady = r; });
   let sessionReadyFired = false;
 
-  const done = runTurnInner(sessionId, prompt, impl, sink, model, (sdkSessionId) => {
+  const done = runTurnInner(sessionId, prompt, impl, sink, model, signal, (sdkSessionId) => {
     if (!sessionReadyFired) {
       sessionReadyFired = true;
       resolveSessionReady(sdkSessionId);
@@ -83,6 +84,7 @@ async function runTurnInner(
   impl: ImplFn,
   sink: StreamSink,
   model: string | undefined,
+  signal: AbortSignal | undefined,
   onSessionReady: (sdkSessionId: string | undefined) => void,
 ): Promise<void> {
   const session = dbSessions.get(sessionId);
@@ -101,6 +103,8 @@ async function runTurnInner(
     prompt,
     { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path, model },
     (event) => {
+      if (signal?.aborted) return; // suppress events after abort
+
       if (event.event === "session_ready") {
         // Persist immediately and notify caller
         if (!session.sdk_session_id) {
@@ -126,6 +130,7 @@ async function runTurnInner(
         dbSessions.touch(sessionId);
       }
     },
+    signal,
   );
 
   // Fallback: persist sdkSessionId from return value if session_ready was never emitted

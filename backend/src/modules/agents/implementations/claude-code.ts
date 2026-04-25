@@ -45,7 +45,7 @@ const CLAUDE_BIN = process.env.CLAUDE_BINARY_PATH
   ?? `${process.env.HOME}/.local/bin/claude`;
 const DISALLOWED_TOOLS = ["AskUserQuestion", "ExitPlanMode", "EnterPlanMode", "TodoWrite"];
 
-export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
+export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit, signal) => {
   let capturedSessionId: string | undefined;
 
   const repoAbsPath = resolve(join(REPOS_ROOT, ctx.repo));
@@ -66,7 +66,8 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit) => {
   let currentBlockType: ActivityType | null = null;
   let currentBlockContent = "";
 
-  for await (const msg of query({ prompt, options })) {
+  for await (const msg of query({ prompt, options, signal })) {
+    if (signal?.aborted) break;
     // -----------------------------------------------------------------------
     // SDK init — capture session ID immediately
     // -----------------------------------------------------------------------

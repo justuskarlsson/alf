@@ -2,7 +2,7 @@
 id: T-027
 title: Add stop button for streaming agent sessions
 type: feature
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
@@ -14,10 +14,10 @@ Show a "Stop" icon button below the send button when the current session's turn 
 
 ## Acceptance
 
-- [ ] Stop button appears below send when the viewed session is mid-turn/streaming
-- [ ] Stop button does NOT appear for sessions that are idle
-- [ ] Switching to a non-streaming session hides the stop button
-- [ ] Clicking stop cancels the active turn
-- [ ] UI updates immediately (stop button disappears, streaming ends)
+- [x] Stop button appears below send when the viewed session is mid-turn/streaming
+- [x] Stop button does NOT appear for sessions that are idle
+- [x] Switching to a non-streaming session hides the stop button
+- [x] Clicking stop cancels the active turn
+- [x] UI updates immediately (stop button disappears, streaming ends)
 
 ## Notes

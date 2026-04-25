@@ -54,6 +54,26 @@ Longer background, links, logs. Read this for full picture.
   T-003-old-closed-bug.md       ← status: done in frontmatter
 ```
 
+## Quick filtering (one-liner)
+
+Because tickets are flat files with YAML frontmatter, you can filter by any field using grep:
+
+```bash
+# List all open tickets (just paths)
+grep -l '^status: open' .alf/tickets/*.md
+
+# List all future tickets
+grep -l '^status: future' .alf/tickets/*.md
+
+# List high-priority tickets
+grep -l '^priority: high' .alf/tickets/*.md
+
+# List tickets in a specific epic
+grep -l '^epic: agents' .alf/tickets/*.md
+```
+
+This avoids reading every file — one tool call returns just the paths that match.
+
 ## Frontmatter-only read (efficiency)
 
 For list views, read only until the closing `---` of the frontmatter block.

@@ -107,23 +107,26 @@ export function AnnotationLayer() {
 
   async function commitVoice() {
     if (!popover || !recordingPromiseRef.current) return;
+    // Capture context and promise before async — avoids stale closures
+    const context = popover.context;
+    const promise = recordingPromiseRef.current;
+    recordingPromiseRef.current = null;
     stopRec();
+    setPopover(null);
+    window.getSelection()?.removeAllRanges();
     try {
-      const recording = await recordingPromiseRef.current;
+      const recording = await promise;
       const res = await request<{ text: string }>({
         type: "voice/transcribe",
         audioBase64: recording.audioBase64,
         audioFormat: recording.audioFormat,
       });
-      if (res.text && popover) {
-        addAnnotation(popover.context, res.text);
+      if (res.text) {
+        addAnnotation(context, res.text);
       }
     } catch (err) {
       console.error("Transcription failed:", err);
     }
-    setPopover(null);
-    recordingPromiseRef.current = null;
-    window.getSelection()?.removeAllRanges();
   }
 
   if (!popover) return null;
