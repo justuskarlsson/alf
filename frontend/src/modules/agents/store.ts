@@ -38,6 +38,7 @@ interface AgentsStore {
   _focusTrigger: number; // incremented to trigger input focus
   selectedImpl: string; // active impl for new turns / sessions
   selectedModel: string; // active model (only used by impls in MODEL_OPTIONS)
+  lastSeenMap: Record<string, number>; // sessionId → last-viewed timestamp (for unread indicator)
 
   loadSessions: (repo: string, request: WsRequest) => void;
   selectSession: (id: string, request: WsRequest) => void;
@@ -64,6 +65,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   _focusTrigger: 0,
   selectedImpl: "claude-code",
   selectedModel: "claude-opus-4-6",
+  lastSeenMap: JSON.parse(localStorage.getItem("alf-agent-last-seen") || "{}"),
 
   loadSessions: (repo, request) => {
     // Unsubscribe from the previously selected session (may be from a different repo)
@@ -82,7 +84,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       pendingPrompt: null,
     });
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
-      .then(res => set({ sessions: res.sessions }))
+      .then(res => set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) }))
       .catch(console.error);
   },
 
@@ -91,7 +93,9 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     if (prev && prev !== id) {
       request<AgentUnsubscribeMsg>({ type: "agent/unsubscribe", sessionId: prev }).catch(console.error);
     }
-    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, _focusTrigger: s._focusTrigger + 1 }));
+    const map = { ...get().lastSeenMap, [id]: Date.now() };
+    localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
+    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
     request<DetailResponse>({ type: "agent/session/detail", sessionId: id })
       .then(res => set({ turns: res.turns, activities: res.activities }))
       .catch(console.error);
@@ -167,7 +171,13 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     if (!sid || get().isRunning) return;
     const impl = get().selectedImpl;
     const model = MODEL_OPTIONS[impl] ? get().selectedModel : undefined;
-    set({ isRunning: true, pendingPrompt: prompt, live: null });
+    const now = Date.now();
+    set(s => ({
+      isRunning: true, pendingPrompt: prompt, live: null,
+      sessions: s.sessions
+        .map(sess => sess.id === sid ? { ...sess, updated_at: now } : sess)
+        .sort((a, b) => b.updated_at - a.updated_at),
+    }));
     request<{ sessionId: string; status: string }>({
       type: "agent/message", sessionId: sid, prompt, impl, model,
       ...(files?.length ? { files } : {}),
@@ -203,12 +213,18 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
 
   turnDone: (sessionId, request) => {
     if (sessionId !== get().selectedSessionId) return;
-    set({ live: null, isRunning: false, pendingPrompt: null });
+    const now = Date.now();
+    const map = { ...get().lastSeenMap, [sessionId]: now };
+    localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
+    set(s => ({
+      live: null, isRunning: false, pendingPrompt: null, lastSeenMap: map,
+      sessions: s.sessions
+        .map(sess => sess.id === sessionId ? { ...sess, updated_at: now } : sess)
+        .sort((a, b) => b.updated_at - a.updated_at),
+    }));
     // Reload persisted state from DB
     request<DetailResponse>({ type: "agent/session/detail", sessionId })
       .then(res => set({ turns: res.turns, activities: res.activities }))
       .catch(console.error);
-    // Refresh session list so updated_at order is correct
-    // (caller has repo in scope via closure — we rely on the panel to do this)
   },
 }));

@@ -2,12 +2,13 @@
 id: T-030
 title: Add refresh button to panel top bars
 type: feature
-status: open
+status: done
 priority: medium
 epic: dashboard
 effort: M
 created: 2026-04-25
 updated: 2026-04-25
+resolved: 2026-04-25
 ---
 
 Add a refresh icon to the top bar of panels (next to the drag handle / close button). Clicking it re-runs the panel's initial data fetch without a full page refresh.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { GridLayout } from "react-grid-layout";
@@ -29,6 +29,9 @@ function PanelCard({ label, children, drag, onRemove }: {
   drag?: boolean;
   onRemove?: () => void;
 }) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
+
   return (
     <div className={CARD}>
       <div className={`px-3 h-7 flex items-center gap-2 border-b border-alf-border shrink-0 bg-alf-canvas
@@ -37,6 +40,17 @@ function PanelCard({ label, children, drag, onRemove }: {
           {label}
         </span>
         <div className="ml-auto flex items-center gap-1">
+          <button
+            className="text-slate-700 hover:text-slate-300 transition-colors text-xs px-1 select-none"
+            onClick={handleRefresh}
+            title="Refresh panel"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
           {drag && <span className="font-mono text-xs text-slate-700 select-none">⠿</span>}
           {onRemove && (
             <button
@@ -47,7 +61,7 @@ function PanelCard({ label, children, drag, onRemove }: {
           )}
         </div>
       </div>
-      <div className="flex-1 min-h-0">{children}</div>
+      <div key={refreshKey} className="flex-1 min-h-0">{children}</div>
     </div>
   );
 }

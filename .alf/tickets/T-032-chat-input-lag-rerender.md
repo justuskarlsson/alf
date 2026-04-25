@@ -2,12 +2,13 @@
 id: T-032
 title: Chat input lag on large sessions — likely full message list re-render
 type: bug
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
 created: 2026-04-25
 updated: 2026-04-25
+resolved: 2026-04-25
 ---
 
 Typing in the chat input becomes noticeably laggy as a session grows larger. Each keystroke likely triggers a re-render of the entire message list.

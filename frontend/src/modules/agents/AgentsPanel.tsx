@@ -23,6 +23,8 @@ function SessionList({ repo }: { repo: string }) {
       createSession: s.createSession,
     }))
   );
+  const lastSeenMap = useAgentsStore(s => s.lastSeenMap);
+  const now = useNow();
 
   function handleNew() {
     const title = window.prompt("Session title:") ?? "";
@@ -47,6 +49,8 @@ function SessionList({ repo }: { repo: string }) {
               key={s.id}
               session={s}
               selected={s.id === selectedSessionId}
+              unread={s.updated_at > (lastSeenMap[s.id] ?? 0) && s.id !== selectedSessionId}
+              now={now}
               onSelect={() => selectSession(s.id, request)}
             />
           ))}
@@ -56,8 +60,8 @@ function SessionList({ repo }: { repo: string }) {
   );
 }
 
-function SessionRow({ session, selected, onSelect }: {
-  session: AgentSession; selected: boolean; onSelect: () => void;
+function SessionRow({ session, selected, unread, now, onSelect }: {
+  session: AgentSession; selected: boolean; unread: boolean; now: number; onSelect: () => void;
 }) {
   const { request } = useRelay();
   const renameSession = useAgentsStore(s => s.renameSession);
@@ -105,7 +109,12 @@ function SessionRow({ session, selected, onSelect }: {
         />
       ) : (
         <div className="flex items-center justify-between gap-1">
-          <div className="font-mono text-sm text-slate-200 truncate">{session.title}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {unread && (
+              <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-sky-400" title="New activity" />
+            )}
+            <span className="font-mono text-sm text-slate-200 truncate">{session.title}</span>
+          </div>
           <button
             onClick={e => {
               e.stopPropagation();
@@ -118,7 +127,7 @@ function SessionRow({ session, selected, onSelect }: {
         </div>
       )}
       <div className="font-mono text-xs text-slate-600 mt-0.5">
-        {new Date(session.updated_at).toLocaleDateString()}
+        {relativeTime(session.updated_at, now)}
       </div>
     </div>
   );
@@ -132,11 +141,16 @@ interface AttachedFile {
   previewUrl?: string;
 }
 
+// ---------------------------------------------------------------------------
+// ChatView — split into ChatFeed (memoized) + ChatComposer (isolated input)
+// to prevent keystroke re-renders from propagating to the message feed.
+// ---------------------------------------------------------------------------
+
 function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
   const {
-    selectedSessionId, turns, activities, live, isRunning, pendingPrompt, sendMessage,
-    stopSession, forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
+    selectedSessionId, turns, activities, live, isRunning, pendingPrompt,
+    forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
   } = useAgentsStore(useShallow(s => ({
     selectedSessionId: s.selectedSessionId,
     turns: s.turns,
@@ -144,8 +158,6 @@ function ChatView({ repo }: { repo: string }) {
     live: s.live,
     isRunning: s.isRunning,
     pendingPrompt: s.pendingPrompt,
-    sendMessage: s.sendMessage,
-    stopSession: s.stopSession,
     forkSession: s.forkSession,
     selectedImpl: s.selectedImpl,
     setSelectedImpl: s.setSelectedImpl,
@@ -153,13 +165,108 @@ function ChatView({ repo }: { repo: string }) {
     setSelectedModel: s.setSelectedModel,
   })));
 
+  if (!selectedSessionId) return <EmptyState message="Select or create a session" />;
+
+  return (
+    <Panel>
+      <PanelHeader title="Chat">
+        <div className="flex items-center gap-1.5">
+          <select
+            value={selectedImpl}
+            onChange={e => setSelectedImpl(e.target.value)}
+            data-testid="impl-selector"
+            className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
+                       text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
+          >
+            {AVAILABLE_IMPLS.map(impl => (
+              <option key={impl} value={impl}>{impl}</option>
+            ))}
+          </select>
+          {MODEL_OPTIONS[selectedImpl] && (
+            <select
+              value={selectedModel}
+              onChange={e => setSelectedModel(e.target.value)}
+              data-testid="model-selector"
+              className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
+                         text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
+            >
+              {MODEL_OPTIONS[selectedImpl].map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          )}
+          {turns.length > 0 && (
+            <button
+              onClick={() => forkSession(request)}
+              disabled={isRunning}
+              title="Fork this conversation"
+              data-testid="fork-btn"
+              className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors
+                         disabled:opacity-30 px-1"
+            >fork</button>
+          )}
+        </div>
+      </PanelHeader>
+
+      <ChatFeed
+        turns={turns}
+        activities={activities}
+        live={live}
+        pendingPrompt={pendingPrompt}
+        selectedSessionId={selectedSessionId}
+      />
+
+      <ChatComposer />
+    </Panel>
+  );
+}
+
+/** Memoized feed — only re-renders when turns/activities/live/pendingPrompt change. */
+const ChatFeed = React.memo(function ChatFeed({ turns, activities, live, pendingPrompt, selectedSessionId }: {
+  turns: AgentTurn[];
+  activities: AgentActivity[];
+  live: LiveState | null;
+  pendingPrompt: string | null;
+  selectedSessionId: string;
+}) {
+  const feed = buildFeed(turns, activities, live, pendingPrompt);
+  return (
+    <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed" data-alf-ctx-session={selectedSessionId}>
+      <div className="flex flex-col-reverse gap-2 p-3">
+        {feed.map((item, i) => <FeedItem key={i} item={item} />)}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * ChatComposer — fully isolated input area.
+ * Owns its own local state (input text, attached files, voice) so keystrokes
+ * never re-render the message feed above.
+ */
+function ChatComposer() {
+  const { request } = useRelay();
+  const { selectedSessionId, isRunning, sendMessage, stopSession } = useAgentsStore(
+    useShallow(s => ({
+      selectedSessionId: s.selectedSessionId,
+      isRunning: s.isRunning,
+      sendMessage: s.sendMessage,
+      stopSession: s.stopSession,
+    }))
+  );
+
   const [input, setInput] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus input whenever _focusTrigger increments (session select/create).
+  // Also focus on mount — ChatComposer may mount after the trigger already fired
+  // (e.g. first session creation transitions from EmptyState → ChatComposer).
   useEffect(() => {
+    if (useAgentsStore.getState().selectedSessionId) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
     let prev = useAgentsStore.getState()._focusTrigger;
     const unsub = useAgentsStore.subscribe((state) => {
       if (state._focusTrigger !== prev) {
@@ -221,7 +328,6 @@ function ChatView({ repo }: { repo: string }) {
   async function handleMicToggle() {
     if (micState === "recording") {
       micStop();
-      // Capture and clear the promise ref immediately to avoid race with next recording
       const promise = micPromiseRef.current;
       micPromiseRef.current = null;
       if (promise) {
@@ -249,7 +355,6 @@ function ChatView({ repo }: { repo: string }) {
     const files = attachedFiles.length
       ? attachedFiles.map(f => ({ name: f.name, base64: f.base64, mimeType: f.mimeType }))
       : undefined;
-    // Prepend annotations to prompt
     const annotationText = formatAnnotations();
     const fullPrompt = annotationText
       ? `${annotationText}\n\n---\n\n${trimmed || "(see annotations above)"}`
@@ -261,57 +366,8 @@ function ChatView({ repo }: { repo: string }) {
     sendMessage(fullPrompt, request, files);
   }
 
-  if (!selectedSessionId) return <EmptyState message="Select or create a session" />;
-
-  const feed = buildFeed(turns, activities, live, pendingPrompt);
-
   return (
-    <Panel>
-      <PanelHeader title="Chat">
-        <div className="flex items-center gap-1.5">
-          <select
-            value={selectedImpl}
-            onChange={e => setSelectedImpl(e.target.value)}
-            data-testid="impl-selector"
-            className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
-                       text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
-          >
-            {AVAILABLE_IMPLS.map(impl => (
-              <option key={impl} value={impl}>{impl}</option>
-            ))}
-          </select>
-          {MODEL_OPTIONS[selectedImpl] && (
-            <select
-              value={selectedModel}
-              onChange={e => setSelectedModel(e.target.value)}
-              data-testid="model-selector"
-              className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
-                         text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
-            >
-              {MODEL_OPTIONS[selectedImpl].map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          )}
-          {turns.length > 0 && (
-            <button
-              onClick={() => forkSession(request)}
-              disabled={isRunning}
-              title="Fork this conversation"
-              data-testid="fork-btn"
-              className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors
-                         disabled:opacity-30 px-1"
-            >fork</button>
-          )}
-        </div>
-      </PanelHeader>
-
-      <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed" data-alf-ctx-session={selectedSessionId ?? undefined}>
-        <div className="flex flex-col-reverse gap-2 p-3">
-          {feed.map((item, i) => <FeedItem key={i} item={item} />)}
-        </div>
-      </div>
-
+    <>
       {/* Annotation chips */}
       {annotations.length > 0 && (
         <div className="shrink-0 border-t border-alf-border px-2 py-1.5 flex flex-wrap gap-1.5" data-testid="annotation-chips">
@@ -403,7 +459,7 @@ function ChatView({ repo }: { repo: string }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           onPaste={handlePaste}
-          placeholder={isRunning ? "Waiting for response… (type your next message)" : "Send a message..."}
+          placeholder={isRunning ? "Waiting for response... (type your next message)" : "Send a message..."}
           rows={2}
           data-testid="prompt-input"
           className="flex-1 bg-alf-bg border border-alf-border rounded px-2 py-1 text-sm font-mono
@@ -433,7 +489,7 @@ function ChatView({ repo }: { repo: string }) {
           )}
         </div>
       </div>
-    </Panel>
+    </>
   );
 }
 
@@ -441,7 +497,7 @@ type FeedItemData =
   | { kind: "user"; prompt: string }
   | { kind: "activity"; activityType: string; content: string; live?: boolean };
 
-function FeedItem({ item }: { item: FeedItemData }) {
+const FeedItem = React.memo(function FeedItem({ item }: { item: FeedItemData }) {
   if (item.kind === "user") {
     return (
       <div className="self-end max-w-[80%] bg-alf-surface rounded px-3 py-2">
@@ -450,7 +506,6 @@ function FeedItem({ item }: { item: FeedItemData }) {
     );
   }
 
-  // Render finished text activities as markdown, everything else as plain text
   const isText = item.activityType === "text";
   const isFinished = !item.live;
 
@@ -475,7 +530,7 @@ function FeedItem({ item }: { item: FeedItemData }) {
       )}
     </div>
   );
-}
+});
 
 export function AgentsPanel({ repo }: { repo: string }) {
   const { subscribe, request } = useRelay();
@@ -518,7 +573,6 @@ function buildFeed(
 ): FeedItemData[] {
   const items: FeedItemData[] = [];
 
-  // Live (streaming) activity at the front — will be reversed to top
   if (live) {
     items.push({ kind: "activity", activityType: live.activityType, content: live.content, live: true });
   }
@@ -526,13 +580,12 @@ function buildFeed(
     items.push({ kind: "user", prompt: pendingPrompt });
   }
 
-  // Historical turns + activities, newest turn first
   const turnsCopy = [...turns].reverse();
   for (const turn of turnsCopy) {
     const turnActivities = activities
       .filter(a => a.turn_id === turn.id)
       .sort((a, b) => a.idx - b.idx)
-      .reverse(); // newest activity on top within the turn
+      .reverse();
 
     for (const act of turnActivities) {
       items.push({ kind: "activity", activityType: act.type, content: act.content });
@@ -543,8 +596,32 @@ function buildFeed(
   return items;
 }
 
-/** Extract file extension for display badge, e.g. "report.pdf" → "PDF" */
+/** Extract file extension for display badge, e.g. "report.pdf" -> "PDF" */
 function extBadge(name: string): string {
   const ext = name.split(".").pop()?.toUpperCase();
   return ext && ext !== name.toUpperCase() ? ext : "FILE";
+}
+
+/** Returns current timestamp, updating every 30s for relative time display. */
+function useNow(intervalMs = 30_000): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+/** Human-friendly relative timestamp. */
+function relativeTime(timestamp: number, now: number): string {
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
 }

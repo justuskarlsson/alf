@@ -2,7 +2,7 @@
 id: T-029
 title: Codex agent SDK implementation
 type: research
-status: open
+status: future
 priority: medium
 epic: agents
 effort: L

@@ -2,12 +2,13 @@
 id: T-031
 title: Session list sorting, relative timestamps, and unread indicator
 type: feature
-status: open
+status: done
 priority: medium
 epic: agents
 effort: M
 created: 2026-04-25
 updated: 2026-04-25
+resolved: 2026-04-25
 ---
 
 Three improvements to the agents panel session list:
