@@ -2,12 +2,13 @@
 id: T-038
 title: "Voice annotation stops working after first recording"
 type: bug
-status: open
+status: done
 priority: critical
 epic: agents
 effort: S
 created: 2026-04-29
 updated: 2026-04-29
+resolved: 2026-04-29
 ---
 
 After the first successful voice annotation, subsequent ones fail: pressing "stop" makes the popover disappear but no annotation is added, and the browser mic indicator stays on.
@@ -56,11 +57,12 @@ Alternative/additional: add `if (popover) return;` at the top of `handleMouseUp`
 
 ## Acceptance
 
-- [ ] Second (and subsequent) voice annotations produce annotation chips
-- [ ] Mic indicator turns off after each annotation stop
-- [ ] No orphaned MediaRecorder streams
-- [ ] First annotation still works (no regression)
+- [x] Second (and subsequent) voice annotations produce annotation chips
+- [x] Mic indicator turns off after each annotation stop
+- [x] No orphaned MediaRecorder streams
+- [x] First annotation still works (no regression)
 
 ## Notes
 
 <!-- 2026-04-29T08:00Z agent:alfred --> Root-caused from console logs showing 3 successful transcribe round-trips but annotations not appearing. The mouseup→click event ordering on the stop button is the culprit.
+<!-- 2026-04-29T08:10Z agent:alfred --> Fixed with two-layer defense in AnnotationLayer.tsx: (1) onMouseUp stopPropagation on popover div, (2) popoverRef guard in handleMouseUp to skip when annotation already active.

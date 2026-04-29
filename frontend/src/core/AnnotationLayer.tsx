@@ -32,8 +32,12 @@ export function AnnotationLayer() {
     if (!mode) { setPopover(null); setTextDraft(""); }
   }, [mode]);
 
+  const popoverRef = useRef(popover);
+  popoverRef.current = popover;
+
   const handleMouseUp = useCallback(() => {
     if (!mode) return;
+    if (popoverRef.current) return; // annotation already active — don't restart
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) return;
 
@@ -139,6 +143,7 @@ export function AnnotationLayer() {
     <div
       data-annotation-popover
       className="fixed z-50"
+      onMouseUp={e => e.stopPropagation()}
       style={{
         top: `${top}px`,
         left: `${left}px`,
