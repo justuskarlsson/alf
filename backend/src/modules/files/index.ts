@@ -28,6 +28,13 @@ export class FilesModule {
     }
 
     try {
+      // Binary files (images, etc.) must be read as base64 — readFileSync("utf8")
+      // silently mangles binary data instead of throwing.
+      if (isBinaryExt(filePath)) {
+        const content = fs.readFileSync(fullPath).toString("base64");
+        reply({ type: "files/get", content, isBinary: true, path: filePath });
+        return;
+      }
       const content = fs.readFileSync(fullPath, "utf8");
       reply({ type: "files/get", content, path: filePath });
     } catch {
@@ -101,4 +108,18 @@ function listFiles(repo: string, useGit = true): FileEntry[] {
     try { return listFilesGit(repoPath); } catch { /* fall through */ }
   }
   return listFilesNaive(repoPath);
+}
+
+const BINARY_EXTS = new Set([
+  "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "tiff", "tif",
+  "pdf", "zip", "gz", "tar", "7z", "rar",
+  "woff", "woff2", "ttf", "otf", "eot",
+  "mp3", "mp4", "wav", "ogg", "webm", "flac",
+  "exe", "dll", "so", "dylib", "bin",
+  "sqlite", "db",
+]);
+
+function isBinaryExt(filePath: string): boolean {
+  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+  return BINARY_EXTS.has(ext);
 }
