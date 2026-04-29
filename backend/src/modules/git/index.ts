@@ -24,10 +24,21 @@ export class GitModule {
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     try {
       // --porcelain covers modified, staged, untracked (??), deleted, etc.
-      const raw = execSync("git status --porcelain", { cwd: repoPath(repo), encoding: "utf8" });
-      const files = raw.split("\n").filter(Boolean)
-        .map(line => line.slice(3).trim())
-        .filter(f => f && f !== "/dev/null");
+      // Untracked directories show as "?? dir/" — expand to individual files.
+      const cwd = repoPath(repo);
+      const raw = execSync("git status --porcelain", { cwd, encoding: "utf8" });
+      const files: string[] = [];
+      for (const line of raw.split("\n").filter(Boolean)) {
+        const entry = line.slice(3).trim();
+        if (!entry || entry === "/dev/null") continue;
+        if (entry.endsWith("/")) {
+          // Untracked directory — expand to individual files
+          const expanded = git(cwd, ["ls-files", "--others", "--exclude-standard", "--", entry]);
+          for (const f of expanded.split("\n").filter(Boolean)) files.push(f);
+        } else {
+          files.push(entry);
+        }
+      }
       reply({ type: "git/changed-files", files });
     } catch {
       reply({ type: "git/changed-files", files: [] });
