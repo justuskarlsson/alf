@@ -15,7 +15,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { ImplFn, ActivityType } from "../../../core/agents/types.js";
+import type { ImplFn, ActivityType, ContextUsage } from "../../../core/agents/types.js";
 import { createLogger } from "../../../core/logger.js";
 
 const log = createLogger("claude-code-impl");
@@ -65,6 +65,11 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit, signal) => {
   // Track the current streaming content block
   let currentBlockType: ActivityType | null = null;
   let currentBlockContent = "";
+
+  // Track context usage from assistant messages + result
+  let lastInputTokens = 0;
+  let lastOutputTokens = 0;
+  let contextWindow = 0;
 
   for await (const msg of query({ prompt, options, signal })) {
     if (signal?.aborted) break;
@@ -138,7 +143,10 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit, signal) => {
     }
 
     // -----------------------------------------------------------------------
-    // Result — final status
+    // Result — final status + usage from modelUsage (camelCase fields)
+    // modelUsage[model] has: inputTokens, outputTokens, contextWindow
+    // These are cumulative across all API calls in the turn, but for
+    // single-iteration turns inputTokens ≈ current context fill.
     // -----------------------------------------------------------------------
     if (msg.type === "result") {
       if (msg.subtype !== "success" || msg.is_error) {
@@ -147,10 +155,37 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit, signal) => {
           : "subtype" in msg ? msg.subtype : "unknown error";
         throw new Error(`Claude Code SDK result error: ${errMsg}`);
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const modelUsage = (msg as any).modelUsage as Record<string, {
+        inputTokens?: number; outputTokens?: number; contextWindow?: number;
+      }> | undefined;
+      if (modelUsage) {
+        const first = Object.values(modelUsage)[0];
+        if (first) {
+          lastInputTokens = first.inputTokens ?? 0;
+          lastOutputTokens = first.outputTokens ?? 0;
+          contextWindow = first.contextWindow ?? 0;
+        }
+      }
+      // Fallback: result.usage (snake_case BetaUsage) if modelUsage was empty
+      if (!lastInputTokens) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const resultUsage = (msg as any).usage as { input_tokens?: number; output_tokens?: number } | undefined;
+        if (resultUsage) {
+          lastInputTokens = resultUsage.input_tokens ?? 0;
+          lastOutputTokens = resultUsage.output_tokens ?? 0;
+        }
+      }
     }
   }
 
-  emit({ event: "turn_done" });
+  const usage: ContextUsage | undefined = (lastInputTokens && contextWindow)
+    ? { contextTokens: lastInputTokens + lastOutputTokens, maxContextTokens: contextWindow }
+    : undefined;
+
+  log.info("Turn usage", { lastInputTokens, lastOutputTokens, contextWindow, usage });
+
+  emit({ event: "turn_done", usage });
 
   return { sdkSessionId: capturedSessionId ?? ctx.sdkSessionId };
 };

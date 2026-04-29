@@ -45,7 +45,7 @@ export const testImpl: ImplFn = async (prompt, ctx, emit, signal) => {
     await sleep(DELAY, signal);
     emit({ event: "activity_delta", activityType: "thinking", content });
     emit({ event: "activity_end", activityType: "thinking", content });
-    emit({ event: "turn_done" });
+    emit({ event: "turn_done", usage: { contextTokens: 12_000, maxContextTokens: 200_000 } });
     return {};
   }
 
@@ -81,7 +81,7 @@ export const testImpl: ImplFn = async (prompt, ctx, emit, signal) => {
   }
   emit({ event: "activity_end", activityType: "text", content: text });
 
-  emit({ event: "turn_done" });
+  emit({ event: "turn_done", usage: { contextTokens: 12_000, maxContextTokens: 200_000 } });
 
   return {}; // no sdkSessionId — test impl has no external session
 };

@@ -103,7 +103,10 @@ export class AgentsModule {
     reply({ type: "agent/message", sessionId: sid, status: "running" });
 
     done
-      .then(() => fanOut(sid, connectionId, { type: "agent/turn/done", sessionId: sid }))
+      .then((result) => fanOut(sid, connectionId, {
+        type: "agent/turn/done", sessionId: sid,
+        ...(result.usage ? { usage: result.usage } : {}),
+      }))
       .catch((err) => {
         // Aborted turns are expected — still send turn/done so frontend clears isRunning
         if (abort.signal.aborted) {

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type {
   AgentSession, AgentTurn, AgentActivity, AgentDelta, AgentLastCoord,
-  AgentSubscribeMsg, AgentUnsubscribeMsg,
+  AgentSubscribeMsg, AgentUnsubscribeMsg, ContextUsage,
 } from "@alf/types";
 
 type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
@@ -39,6 +39,7 @@ interface AgentsStore {
   selectedImpl: string; // active impl for new turns / sessions
   selectedModel: string; // active model (only used by impls in MODEL_OPTIONS)
   lastSeenMap: Record<string, number>; // sessionId → last-viewed timestamp (for unread indicator)
+  contextUsage: ContextUsage | null; // latest context window usage for selected session
 
   loadSessions: (repo: string, request: WsRequest) => void;
   selectSession: (id: string, request: WsRequest) => void;
@@ -51,7 +52,7 @@ interface AgentsStore {
   setSelectedImpl: (impl: string) => void;
   setSelectedModel: (model: string) => void;
   appendDelta: (delta: AgentDelta) => void;
-  turnDone: (sessionId: string, request: WsRequest) => void;
+  turnDone: (sessionId: string, request: WsRequest, usage?: ContextUsage) => void;
 }
 
 export const useAgentsStore = create<AgentsStore>((set, get) => ({
@@ -65,6 +66,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   _focusTrigger: 0,
   selectedImpl: "claude-code",
   selectedModel: "claude-opus-4-6",
+  contextUsage: null,
   lastSeenMap: JSON.parse(localStorage.getItem("alf-agent-last-seen") || "{}"),
 
   loadSessions: (repo, request) => {
@@ -82,6 +84,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       live: null,
       isRunning: false,
       pendingPrompt: null,
+      contextUsage: null,
     });
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
       .then(res => set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) }))
@@ -95,7 +98,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     }
     const map = { ...get().lastSeenMap, [id]: Date.now() };
     localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
-    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
+    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
     request<DetailResponse>({ type: "agent/session/detail", sessionId: id })
       .then(res => set({ turns: res.turns, activities: res.activities }))
       .catch(console.error);
@@ -159,7 +162,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       .then(() => set(s => {
         const sessions = s.sessions.filter(sess => sess.id !== id);
         const cleared = s.selectedSessionId === id
-          ? { selectedSessionId: null, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null }
+          ? { selectedSessionId: null, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null }
           : {};
         return { sessions, ...cleared };
       }))
@@ -211,13 +214,14 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     });
   },
 
-  turnDone: (sessionId, request) => {
+  turnDone: (sessionId, request, usage) => {
     if (sessionId !== get().selectedSessionId) return;
     const now = Date.now();
     const map = { ...get().lastSeenMap, [sessionId]: now };
     localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
     set(s => ({
       live: null, isRunning: false, pendingPrompt: null, lastSeenMap: map,
+      contextUsage: usage ?? s.contextUsage,
       sessions: s.sessions
         .map(sess => sess.id === sessionId ? { ...sess, updated_at: now } : sess)
         .sort((a, b) => b.updated_at - a.updated_at),

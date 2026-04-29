@@ -4,6 +4,12 @@
 
 export type ActivityType = "thinking" | "tool" | "text";
 
+/** Snapshot of context window consumption at end of a turn. */
+export interface ContextUsage {
+  contextTokens: number;   // tokens currently in context window
+  maxContextTokens: number; // model's context window size
+}
+
 /**
  * Events emitted by an impl during a turn.
  * Core listens to these and writes to DB / forwards to stream subscribers.
@@ -13,7 +19,12 @@ export type ActivityEvent =
   | { event: "activity_delta"; activityType: ActivityType; content: string }
   | { event: "activity_end";   activityType: ActivityType; content: string }
   | { event: "session_ready";  sdkSessionId: string }
-  | { event: "turn_done" };
+  | { event: "turn_done"; usage?: ContextUsage };
+
+/** Result returned from runTurn's done promise. */
+export interface TurnResult {
+  usage?: ContextUsage;
+}
 
 /** Context passed to an impl on each turn. */
 export interface ImplContext {

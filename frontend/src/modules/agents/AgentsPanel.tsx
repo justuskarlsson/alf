@@ -7,7 +7,7 @@ import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
 import { useAgentsStore, AVAILABLE_IMPLS, MODEL_OPTIONS, type LiveState } from "./store";
 import { useAnnotationStore } from "../../core/annotationStore";
 import { useVoiceRecorder } from "../../core/useVoiceRecorder";
-import type { AgentActivity, AgentDelta, AgentSession, AgentTurn } from "@alf/types";
+import type { AgentActivity, AgentDelta, AgentSession, AgentTurn, ContextUsage } from "@alf/types";
 
 // ---------------------------------------------------------------------------
 // Handlers at top — helpers below
@@ -142,6 +142,29 @@ interface AttachedFile {
 }
 
 // ---------------------------------------------------------------------------
+// Context usage indicator — compact bar + label in the chat header
+// ---------------------------------------------------------------------------
+
+function ContextUsageIndicator({ usage }: { usage: ContextUsage }) {
+  const pct = Math.min(100, (usage.contextTokens / usage.maxContextTokens) * 100);
+  const label = `${formatTokens(usage.contextTokens)} / ${formatTokens(usage.maxContextTokens)}`;
+  const color = pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-sky-500";
+
+  return (
+    <div
+      className="flex items-center gap-1.5 pl-1.5"
+      title={`Context: ${label} (${pct.toFixed(0)}%)`}
+      data-testid="context-usage"
+    >
+      <div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="font-mono text-[10px] text-slate-500 whitespace-nowrap">{label}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ChatView — split into ChatFeed (memoized) + ChatComposer (isolated input)
 // to prevent keystroke re-renders from propagating to the message feed.
 // ---------------------------------------------------------------------------
@@ -151,6 +174,7 @@ function ChatView({ repo }: { repo: string }) {
   const {
     selectedSessionId, turns, activities, live, isRunning, pendingPrompt,
     forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
+    contextUsage,
   } = useAgentsStore(useShallow(s => ({
     selectedSessionId: s.selectedSessionId,
     turns: s.turns,
@@ -163,6 +187,7 @@ function ChatView({ repo }: { repo: string }) {
     setSelectedImpl: s.setSelectedImpl,
     selectedModel: s.selectedModel,
     setSelectedModel: s.setSelectedModel,
+    contextUsage: s.contextUsage,
   })));
 
   if (!selectedSessionId) return <EmptyState message="Select or create a session" />;
@@ -205,6 +230,7 @@ function ChatView({ repo }: { repo: string }) {
                          disabled:opacity-30 px-1"
             >fork</button>
           )}
+          {contextUsage && <ContextUsageIndicator usage={contextUsage} />}
         </div>
       </PanelHeader>
 
@@ -550,8 +576,8 @@ export function AgentsPanel({ repo }: { repo: string }) {
   useEffect(() => {
     const unsubDelta = subscribe("agent/delta", (msg) => appendDelta(msg as unknown as AgentDelta));
     const unsubDone  = subscribe("agent/turn/done", (msg) => {
-      const { sessionId } = msg as { sessionId: string };
-      turnDone(sessionId, request);
+      const { sessionId, usage } = msg as { sessionId: string; usage?: ContextUsage };
+      turnDone(sessionId, request, usage);
     });
     return () => { unsubDelta(); unsubDone(); };
   }, []);
@@ -627,6 +653,13 @@ function useNow(intervalMs = 30_000): number {
     return () => clearInterval(id);
   }, []);
   return now;
+}
+
+/** Format token count for display: 12000 → "12k", 200000 → "200k". */
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return String(n);
 }
 
 /** Human-friendly relative timestamp. */

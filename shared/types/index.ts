@@ -80,6 +80,12 @@ export interface AgentLastCoord {
   activityIdx: number;
 }
 
+/** Context window usage snapshot — sent with agent/turn/done. */
+export interface ContextUsage {
+  contextTokens: number;
+  maxContextTokens: number;
+}
+
 // ---------------------------------------------------------------------------
 // Git
 // ---------------------------------------------------------------------------

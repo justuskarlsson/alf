@@ -7,9 +7,9 @@
  */
 
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../db/index.js";
-import type { ImplFn, ActivityType, LiveDelta } from "./types.js";
+import type { ImplFn, ActivityType, LiveDelta, TurnResult, ContextUsage } from "./types.js";
 
-export type { LiveDelta };
+export type { LiveDelta, TurnResult, ContextUsage };
 
 /** Called by the handler for each delta during a turn. */
 export type StreamSink = (delta: LiveDelta) => void;
@@ -19,7 +19,7 @@ export interface TurnHandle {
   /** Resolves with sdkSessionId as soon as the impl surfaces it, or undefined if N/A. */
   sessionReady: Promise<string | undefined>;
   /** Resolves when the full turn completes (all activities persisted). */
-  done: Promise<void>;
+  done: Promise<TurnResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ async function runTurnInner(
   model: string | undefined,
   signal: AbortSignal | undefined,
   onSessionReady: (sdkSessionId: string | undefined) => void,
-): Promise<void> {
+): Promise<TurnResult> {
   const session = dbSessions.get(sessionId);
   if (!session) throw new Error(`Session not found: ${sessionId}`);
 
@@ -98,6 +98,7 @@ async function runTurnInner(
   // 0-based within this turn — resets each turn. Replay uses (turn.idx, activity.idx) composite.
   let activityIdx = 0;
   let currentType: ActivityType | null = null;
+  let turnUsage: ContextUsage | undefined;
 
   const result = await impl(
     prompt,
@@ -128,6 +129,7 @@ async function runTurnInner(
       } else if (event.event === "turn_done") {
         dbTurns.complete(turn.id);
         dbSessions.touch(sessionId);
+        if (event.usage) turnUsage = event.usage;
       }
     },
     signal,
@@ -140,4 +142,5 @@ async function runTurnInner(
   }
 
   void currentType; // suppress unused warning — tracked for potential partial-write recovery
+  return { usage: turnUsage };
 }
