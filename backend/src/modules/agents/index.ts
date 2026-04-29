@@ -233,7 +233,7 @@ function saveUploadedFiles(
   const savedPaths: string[] = [];
   for (const file of files) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const filePath = join(uploadsDir, safeName);
+    const filePath = join(uploadsDir, uniqueName(uploadsDir, safeName));
     writeFileSync(filePath, Buffer.from(file.base64, "base64"));
     savedPaths.push(filePath);
     log.info("File saved", { name: file.name, path: filePath });
@@ -247,4 +247,15 @@ function ensureAlfGitignore(alfDir: string): void {
   if (!existsSync(gitignorePath)) {
     writeFileSync(gitignorePath, "uploads/\n");
   }
+}
+
+/** Return a filename that doesn't collide with existing files in dir. */
+function uniqueName(dir: string, name: string): string {
+  if (!existsSync(join(dir, name))) return name;
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let i = 1;
+  while (existsSync(join(dir, `${stem}-${i}${ext}`))) i++;
+  return `${stem}-${i}${ext}`;
 }

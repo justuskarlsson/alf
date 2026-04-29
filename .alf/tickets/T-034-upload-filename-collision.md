@@ -2,12 +2,12 @@
 id: T-034
 title: Pasted images overwrite each other due to identical filenames
 type: bug
-status: open
+status: done
 priority: high
 epic: uploads
 effort: S
 created: 2026-04-27
-updated: 2026-04-27
+updated: 2026-04-29
 ---
 
 When a user pastes multiple screenshots in the same conversation, they all get saved as `image.png` inside the same upload directory. Each paste overwrites the previous file, so only the last image survives.
@@ -22,11 +22,12 @@ Observed during a real session: user pasted 3 different screenshots — a chat e
 
 ## Acceptance
 
-- [ ] Pasted images get unique filenames (e.g. `image-1.png`, `image-2.png` or timestamp-based like `paste-1745123456.png`)
-- [ ] Or: each paste gets its own subdirectory
-- [ ] Previously pasted images in the same session are not overwritten
-- [ ] Existing upload references in conversation history still resolve correctly
+- [x] Pasted images get unique filenames (e.g. `image-1.png`, `image-2.png` or timestamp-based like `paste-1745123456.png`)
+- [ ] ~~Or: each paste gets its own subdirectory~~ (went with unique filenames instead)
+- [x] Previously pasted images in the same session are not overwritten
+- [x] Existing upload references in conversation history still resolve correctly
 
 ## Notes
 
 <!-- 2026-04-27T12:00Z agent:alfred --> Filed from project-socrates-dev session where 3 screenshots were pasted but only the last survived due to filename collision.
+<!-- 2026-04-29T07:38Z agent:alfred --> Fixed. Added `uniqueName()` helper in backend agents module. When saving a file, if `image.png` already exists, it becomes `image-1.png`, `image-2.png`, etc. Existing files are never overwritten. Old references remain valid since their paths don't change.

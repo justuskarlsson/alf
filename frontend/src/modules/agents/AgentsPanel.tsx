@@ -284,10 +284,15 @@ function ChatComposer() {
         const dataUrl = reader.result as string;
         const base64 = dataUrl.split(",")[1] ?? "";
         const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-        setAttachedFiles(prev => [...prev, {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          name: file.name, base64, mimeType: file.type, previewUrl,
-        }]);
+        // Clipboard pastes always use generic names like "image.png" — deduplicate
+        // Must compute name inside updater so concurrent onloadend callbacks see latest state
+        setAttachedFiles(prev => {
+          const name = deduplicateName(file.name, prev);
+          return [...prev, {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            name, base64, mimeType: file.type, previewUrl,
+          }];
+        });
       };
       reader.readAsDataURL(file);
     }
@@ -338,7 +343,7 @@ function ChatComposer() {
             type: "voice/transcribe",
             audioBase64: rec.audioBase64,
             audioFormat: rec.audioFormat,
-          });
+          }, 120_000);
           if (res.text) setInput(prev => prev ? `${prev} ${res.text}` : res.text);
         } catch (err) { console.error("Transcription failed:", err); }
         setIsTranscribing(false);
@@ -600,6 +605,18 @@ function buildFeed(
 function extBadge(name: string): string {
   const ext = name.split(".").pop()?.toUpperCase();
   return ext && ext !== name.toUpperCase() ? ext : "FILE";
+}
+
+/** If name already exists in the attached list, append -1, -2, etc. */
+function deduplicateName(name: string, existing: AttachedFile[]): string {
+  const names = new Set(existing.map(f => f.name));
+  if (!names.has(name)) return name;
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let i = 1;
+  while (names.has(`${stem}-${i}${ext}`)) i++;
+  return `${stem}-${i}${ext}`;
 }
 
 /** Returns current timestamp, updating every 30s for relative time display. */
