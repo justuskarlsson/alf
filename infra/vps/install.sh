@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# One-time VPS setup: nginx, certbot, systemd service for relay, frontend build.
+# One-time VPS setup: nginx (443), certbot, systemd service for relay, frontend build.
 #
 # Usage (as root):
-#   ./install.sh <domain> [frontend_port] [relay_port] [relay_token]
+#   ./install.sh <domain> [relay_port] [relay_token]
 #
 # Example:
-#   ./install.sh alf.example.com 5000 5001 my-secret-token
+#   ./install.sh alf.randomgrejer.se 5001 my-secret-token
 #
 # What it does:
 #   1. Installs nginx + certbot (apt) if missing
-#   2. Creates /etc/nginx/sites-available/alf  (frontend static + relay WS proxy)
-#   3. Creates /etc/systemd/system/alf-relay.service
-#   4. Writes infra/vps/.env  (sourced by relay service + frontend build)
-#   5. Builds the frontend (vite build)
-#   6. Starts relay, obtains SSL cert via certbot
+#   2. Obtains SSL cert via certbot (standalone, needs port 80 free)
+#   3. Creates /etc/nginx/sites-available/alf
+#        - HTTPS (443): static frontend + WS proxy for /client and /server
+#        - HTTP  (80):  ACME challenge + redirect to HTTPS
+#   4. Creates /etc/systemd/system/alf-relay.service (relay on localhost:RELAY_PORT)
+#   5. Writes infra/vps/.env (sourced by relay service)
+#   6. Builds the frontend (vite build), starts relay + nginx
 #
 # Prerequisites: node (>=20), pnpm, git — must already be on the box.
 
@@ -22,12 +24,11 @@ set -euo pipefail
 # ---------- args ----------
 
 DOMAIN="${1:-}"
-FRONTEND_PORT="${2:-5000}"
-RELAY_PORT="${3:-5001}"
-RELAY_TOKEN="${4:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)}"
+RELAY_PORT="${2:-5001}"
+RELAY_TOKEN="${3:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)}"
 
 if [[ -z "$DOMAIN" ]]; then
-  echo "Usage: $0 <domain> [frontend_port] [relay_port] [relay_token]"
+  echo "Usage: $0 <domain> [relay_port] [relay_token]"
   exit 1
 fi
 
@@ -42,10 +43,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-echo "==> Domain:        $DOMAIN"
-echo "==> Frontend port: $FRONTEND_PORT"
-echo "==> Relay port:    $RELAY_PORT"
-echo "==> Repo root:     $REPO_ROOT"
+echo "==> Domain:     $DOMAIN"
+echo "==> Relay port: $RELAY_PORT (internal, proxied by nginx)"
+echo "==> Repo root:  $REPO_ROOT"
 
 # ---------- deps ----------
 
@@ -66,7 +66,6 @@ done
 echo ""
 echo "==> Writing $ENV_FILE"
 cat > "$ENV_FILE" << EOF
-FRONTEND_PORT=$FRONTEND_PORT
 RELAY_PORT=$RELAY_PORT
 RELAY_TOKEN=$RELAY_TOKEN
 EOF
@@ -77,10 +76,6 @@ echo "   (relay token: $RELAY_TOKEN)"
 
 echo ""
 echo "==> Creating systemd service: alf-relay"
-
-# Detect node/pnpm paths (may be under nvm, fnm, etc.)
-NODE_BIN="$(command -v node)"
-TSX_BIN="$REPO_ROOT/relay/node_modules/.bin/tsx"
 
 cat > /etc/systemd/system/alf-relay.service << EOF
 [Unit]
@@ -133,7 +128,6 @@ pnpm install --frozen-lockfile
 
 cd "$REPO_ROOT/frontend"
 pnpm install --frozen-lockfile
-
 pnpm build
 
 # ---------- certbot ----------
@@ -169,7 +163,7 @@ upstream alf_relay {
     keepalive 64;
 }
 
-# Port 80 — certbot ACME challenge only, redirect everything else
+# HTTP — certbot ACME challenge + redirect to HTTPS
 server {
     listen 80;
     listen [::]:80;
@@ -180,17 +174,16 @@ server {
     }
 
     location / {
-        return 301 https://\$server_name:$FRONTEND_PORT\$request_uri;
+        return 301 https://\$server_name\$request_uri;
     }
 }
 
-# Main server
+# HTTPS
 server {
-    listen $FRONTEND_PORT ssl;
-    listen [::]:$FRONTEND_PORT ssl;
+    listen 443 ssl;
+    listen [::]:443 ssl;
     server_name $DOMAIN;
 
-    # SSL certs — certbot will fill these in
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
@@ -231,7 +224,7 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    # Relay health (plain HTTP)
+    # Relay health
     location = /health {
         proxy_pass http://alf_relay;
         access_log off;
@@ -258,10 +251,10 @@ systemctl status alf-relay --no-pager || true
 echo ""
 echo "============================================"
 echo "  Alf VPS setup complete!"
-echo "  Frontend:    https://$DOMAIN:$FRONTEND_PORT"
-echo "  Relay:       wss://$DOMAIN:$FRONTEND_PORT/client"
+echo "  Frontend:    https://$DOMAIN"
+echo "  Relay:       wss://$DOMAIN/client  (proxied to localhost:$RELAY_PORT)"
 echo "  Relay token: $RELAY_TOKEN"
 echo "  Env file:    $ENV_FILE"
 echo ""
-echo "  Backend connects to: wss://$DOMAIN:$FRONTEND_PORT/server"
+echo "  Backend connects to: wss://$DOMAIN/server"
 echo "============================================"
