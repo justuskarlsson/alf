@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { useState } from "react";
 import { RelayProvider } from "./core/RelayProvider";
 import { OverviewPage } from "./pages/OverviewPage";
 import { RepoPage } from "./pages/RepoPage";
+import { TokenGate } from "./core/TokenGate";
 
 const relayUrl = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:3100/client";
-const relayToken = import.meta.env.VITE_RELAY_TOKEN ?? "dev-token";
 
 // Wrapper forces full re-mount of RepoPage on repo change via key,
 // so useOnConnect in RepoPage registers fresh without needing useEffect deps.
@@ -13,9 +14,25 @@ function RepoRoute() {
   return <RepoPage key={repo} repo={repo!} />;
 }
 
+function getInitialToken(): string | null {
+  return import.meta.env.VITE_RELAY_TOKEN
+    ?? localStorage.getItem("relay_token");
+}
+
 export function App() {
+  const [token, setToken] = useState<string | null>(getInitialToken);
+
+  if (!token) {
+    return (
+      <TokenGate onToken={(t) => {
+        localStorage.setItem("relay_token", t);
+        setToken(t);
+      }} />
+    );
+  }
+
   return (
-    <RelayProvider url={relayUrl} token={relayToken}>
+    <RelayProvider url={relayUrl} token={token}>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<OverviewPage />} />

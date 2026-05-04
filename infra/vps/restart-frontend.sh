@@ -20,7 +20,7 @@ cd "$REPO_ROOT/frontend"
 pnpm install --frozen-lockfile
 
 echo "==> Building frontend..."
-# Source env so VITE_* vars are baked into the build
+# Source env so VITE_RELAY_URL is baked into the build (token is NOT — user enters it once)
 set -a; source "$ENV_FILE"; set +a
 pnpm build
 

@@ -2,10 +2,10 @@
 # One-time VPS setup: nginx, certbot, systemd service for relay, frontend build.
 #
 # Usage (as root):
-#   ./install.sh <domain> [relay_port] [relay_token]
+#   ./install.sh <domain> [frontend_port] [relay_port] [relay_token]
 #
 # Example:
-#   ./install.sh alf.example.com 5001 my-secret-token
+#   ./install.sh alf.example.com 5000 5001 my-secret-token
 #
 # What it does:
 #   1. Installs nginx + certbot (apt) if missing
@@ -22,11 +22,12 @@ set -euo pipefail
 # ---------- args ----------
 
 DOMAIN="${1:-}"
-RELAY_PORT="${2:-5001}"
-RELAY_TOKEN="${3:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)}"
+FRONTEND_PORT="${2:-5000}"
+RELAY_PORT="${3:-5001}"
+RELAY_TOKEN="${4:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)}"
 
 if [[ -z "$DOMAIN" ]]; then
-  echo "Usage: $0 <domain> [relay_port] [relay_token]"
+  echo "Usage: $0 <domain> [frontend_port] [relay_port] [relay_token]"
   exit 1
 fi
 
@@ -41,9 +42,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-echo "==> Domain:     $DOMAIN"
-echo "==> Relay port: $RELAY_PORT"
-echo "==> Repo root:  $REPO_ROOT"
+echo "==> Domain:        $DOMAIN"
+echo "==> Frontend port: $FRONTEND_PORT"
+echo "==> Relay port:    $RELAY_PORT"
+echo "==> Repo root:     $REPO_ROOT"
 
 # ---------- deps ----------
 
@@ -64,10 +66,10 @@ done
 echo ""
 echo "==> Writing $ENV_FILE"
 cat > "$ENV_FILE" << EOF
+FRONTEND_PORT=$FRONTEND_PORT
 RELAY_PORT=$RELAY_PORT
 RELAY_TOKEN=$RELAY_TOKEN
-VITE_RELAY_URL=wss://$DOMAIN/client
-VITE_RELAY_TOKEN=$RELAY_TOKEN
+VITE_RELAY_URL=wss://$DOMAIN:$FRONTEND_PORT/client
 EOF
 
 echo "   (relay token: $RELAY_TOKEN)"
@@ -133,9 +135,25 @@ pnpm install --frozen-lockfile
 cd "$REPO_ROOT/frontend"
 pnpm install --frozen-lockfile
 
-# Source env so VITE_* vars are baked into the build
+# Source env so VITE_RELAY_URL is baked into the build (token is NOT — user enters it once)
 set -a; source "$ENV_FILE"; set +a
 pnpm build
+
+# ---------- certbot ----------
+
+echo ""
+echo "==> Obtaining SSL certificate..."
+
+# Stop nginx temporarily so certbot can bind port 80 (standalone mode)
+systemctl stop nginx 2>/dev/null || true
+
+certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" || {
+  echo ""
+  echo "WARNING: certbot failed. You can retry manually:"
+  echo "  certbot certonly --standalone -d $DOMAIN"
+  echo "  Then re-run this script."
+  exit 1
+}
 
 # ---------- nginx ----------
 
@@ -154,10 +172,30 @@ upstream alf_relay {
     keepalive 64;
 }
 
+# Port 80 — certbot ACME challenge only, redirect everything else
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://\$server_name:$FRONTEND_PORT\$request_uri;
+    }
+}
+
+# Main server
+server {
+    listen $FRONTEND_PORT ssl;
+    listen [::]:$FRONTEND_PORT ssl;
+    server_name $DOMAIN;
+
+    # SSL certs — certbot will fill these in
+    ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
     # Frontend — static files
     root $REPO_ROOT/frontend/dist;
@@ -220,23 +258,13 @@ echo "==> Starting relay service..."
 systemctl start alf-relay
 systemctl status alf-relay --no-pager || true
 
-# ---------- certbot ----------
-
-echo ""
-echo "==> Obtaining SSL certificate with certbot..."
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" || {
-  echo ""
-  echo "WARNING: certbot failed. You can retry manually:"
-  echo "  certbot --nginx -d $DOMAIN"
-}
-
 echo ""
 echo "============================================"
 echo "  Alf VPS setup complete!"
-echo "  Domain:      https://$DOMAIN"
-echo "  Relay:       wss://$DOMAIN/client"
+echo "  Frontend:    https://$DOMAIN:$FRONTEND_PORT"
+echo "  Relay:       wss://$DOMAIN:$FRONTEND_PORT/client"
 echo "  Relay token: $RELAY_TOKEN"
 echo "  Env file:    $ENV_FILE"
 echo ""
-echo "  Backend connects to: wss://$DOMAIN/server"
+echo "  Backend connects to: wss://$DOMAIN:$FRONTEND_PORT/server"
 echo "============================================"
