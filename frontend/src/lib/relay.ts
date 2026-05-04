@@ -7,6 +7,7 @@
 
 const BACKOFF_INITIAL_MS = 1000;
 const BACKOFF_MAX_MS = 30000;
+const PING_INTERVAL_MS = 30_000;
 const CLIENT_ID_KEY = "alf_client_id";
 
 export interface RelayClientConfig {
@@ -30,6 +31,7 @@ export function createRelayClient(config: RelayClientConfig): RelayClient {
   let backoffMs = BACKOFF_INITIAL_MS;
   let stopped = false;
   let authed = false;
+  let pingTimer: ReturnType<typeof setInterval> | null = null;
 
   function getOrCreateClientId(): string {
     const existing = localStorage.getItem(CLIENT_ID_KEY);
@@ -53,6 +55,10 @@ export function createRelayClient(config: RelayClientConfig): RelayClient {
     socket.onopen = () => {
       backoffMs = BACKOFF_INITIAL_MS;
       sendRaw({ type: "auth", token, clientId: getOrCreateClientId() });
+      // Keepalive: prevent NAT/proxy/firewall from killing idle connection
+      pingTimer = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) sendRaw({ type: "ping" });
+      }, PING_INTERVAL_MS);
     };
 
     socket.onmessage = (event) => {
@@ -69,7 +75,10 @@ export function createRelayClient(config: RelayClientConfig): RelayClient {
     };
 
     socket.onclose = () => {
-      if (ws === socket) ws = null;
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+      // Only act if this is still the active socket (not a stale replaced one)
+      if (ws !== socket) return;
+      ws = null;
       authed = false;
       onDisconnect();
       if (!stopped) {
