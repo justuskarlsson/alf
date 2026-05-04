@@ -4,12 +4,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ENV_FILE="$SCRIPT_DIR/.env"
-
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Error: $ENV_FILE not found. Run install.sh first."
-  exit 1
-fi
 
 echo "==> Pulling latest..."
 cd "$REPO_ROOT"
@@ -20,8 +14,6 @@ cd "$REPO_ROOT/frontend"
 pnpm install --frozen-lockfile
 
 echo "==> Building frontend..."
-# Source env so VITE_RELAY_URL is baked into the build (token is NOT — user enters it once)
-set -a; source "$ENV_FILE"; set +a
 pnpm build
 
 echo "==> Done. Nginx serves frontend/dist — no restart needed."

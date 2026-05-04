@@ -134,8 +134,6 @@ pnpm install --frozen-lockfile
 cd "$REPO_ROOT/frontend"
 pnpm install --frozen-lockfile
 
-# Source env so VITE_RELAY_URL is baked into the build (token is NOT — user enters it once)
-set -a; source "$ENV_FILE"; set +a
 pnpm build
 
 # ---------- certbot ----------
@@ -248,7 +246,7 @@ ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
 echo "   Testing nginx config..."
 nginx -t
 
-systemctl reload nginx
+systemctl start nginx
 
 # ---------- start relay ----------
 
