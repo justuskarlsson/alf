@@ -147,13 +147,12 @@ app.get("/client", upgradeWebSocket(() => {
             const connectionId = msg.clientId ?? crypto.randomUUID();
             const targetServer: string = msg.serverName ?? "";
 
-            // Replace existing connection with same clientId
+            // Replace existing connection with same clientId.
+            // Don't close() the old socket — that triggers the browser's onclose
+            // → reconnect → replace loop.  Just orphan it; it'll die on its own.
             const existing = clients.get(connectionId);
             if (existing && existing !== ws) {
               clientIds.delete(existing);
-              try { existing.close(4002, "Replaced by new connection"); } catch { /* ignore */ }
-              const oldTarget = clientServerName.get(connectionId) ?? "";
-              servers.get(oldTarget)?.ws && sendJson(servers.get(oldTarget)!.ws, { type: "client-disconnected", connectionId });
             }
 
             clients.set(connectionId, ws);
