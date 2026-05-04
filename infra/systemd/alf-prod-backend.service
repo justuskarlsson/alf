@@ -1,7 +1,6 @@
 [Unit]
-Description=Alf Prod — Backend
-After=alf-prod-relay.service
-Requires=alf-prod-relay.service
+Description=Alf Prod — Backend (connects to VPS relay)
+After=network.target
 
 [Service]
 Type=simple

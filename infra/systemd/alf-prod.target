@@ -1,6 +1,6 @@
 [Unit]
 Description=Alf Prod Stack
-Wants=alf-prod-relay.service alf-prod-backend.service alf-prod-frontend.service
+Wants=alf-prod-backend.service
 
 [Install]
 WantedBy=default.target

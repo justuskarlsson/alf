@@ -24,10 +24,19 @@ const SERVER_NAME = process.env.SERVER_NAME ?? "";
 
 const BACKOFF_INITIAL_MS = 1000;
 const BACKOFF_MAX_MS = 30000;
+const PING_INTERVAL_MS = 30_000;   // send ping every 30s to keep connection alive
+const PONG_TIMEOUT_MS = 10_000;    // if no pong within 10s, consider connection dead
 
 let ws: WebSocket | null = null;
 let backoffMs = BACKOFF_INITIAL_MS;
 let stopped = false;
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+let pongTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearTimers() {
+  if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+  if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
+}
 
 function send(msg: object) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
@@ -36,15 +45,30 @@ function send(msg: object) {
 function connect() {
   if (stopped) return;
 
-  ws = new WebSocket(`${RELAY_URL}/server`);
+  const socket = new WebSocket(`${RELAY_URL}/server`);
+  ws = socket;
 
-  ws.on("open", () => {
+  socket.on("open", () => {
     backoffMs = BACKOFF_INITIAL_MS;
     log.info("Connected to relay, authenticating");
     send({ type: "auth", token: RELAY_TOKEN, serverName: SERVER_NAME });
+
+    // Keepalive: ping every 30s, terminate if no pong
+    pingTimer = setInterval(() => {
+      if (socket.readyState !== WebSocket.OPEN) return;
+      socket.ping();
+      pongTimer = setTimeout(() => {
+        log.warn("Pong timeout — terminating stale connection");
+        socket.terminate();
+      }, PONG_TIMEOUT_MS);
+    }, PING_INTERVAL_MS);
   });
 
-  ws.on("message", (data) => {
+  socket.on("pong", () => {
+    if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
+  });
+
+  socket.on("message", (data) => {
     const raw = data.toString();
     let msg: Record<string, unknown>;
     try { msg = JSON.parse(raw); } catch { return; }
@@ -58,14 +82,15 @@ function connect() {
     dispatch(raw, send);
   });
 
-  ws.on("close", () => {
-    ws = null;
+  socket.on("close", () => {
+    clearTimers();
+    if (ws === socket) ws = null;
     log.warn(`Disconnected — reconnecting in ${backoffMs}ms`);
     if (!stopped) setTimeout(connect, backoffMs);
     backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX_MS);
   });
 
-  ws.on("error", (e) => { log.error("WS error", { error: String(e) }); });
+  socket.on("error", (e) => { log.error("WS error", { error: String(e) }); });
 }
 
 process.on("SIGTERM", () => { stopped = true; ws?.close(); process.exit(0); });
