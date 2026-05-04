@@ -77,6 +77,9 @@ echo "   (relay token: $RELAY_TOKEN)"
 echo ""
 echo "==> Creating systemd service: alf-relay"
 
+# Resolve node path now so systemd doesn't need nvm/fnm
+NODE_PATH="$(dirname "$(command -v node)")"
+
 cat > /etc/systemd/system/alf-relay.service << EOF
 [Unit]
 Description=Alf Relay
@@ -85,9 +88,10 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$REPO_ROOT/relay
-ExecStart=$SCRIPT_DIR/start-relay.sh
+ExecStart=$REPO_ROOT/relay/node_modules/.bin/tsx src/index.ts
 EnvironmentFile=$ENV_FILE
 Environment=NODE_ENV=production
+Environment=PATH=$NODE_PATH:/usr/local/bin:/usr/bin:/bin
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -97,23 +101,6 @@ SyslogIdentifier=alf-relay
 [Install]
 WantedBy=multi-user.target
 EOF
-
-# Create the start wrapper (ensures PATH is sane for node)
-cat > "$SCRIPT_DIR/start-relay.sh" << 'STARTEOF'
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-# Source nvm / fnm if available
-export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
-export PATH="$HOME/.local/share/pnpm:$HOME/.npm-global/bin:/usr/local/bin:$PATH"
-
-cd "$REPO_ROOT/relay"
-exec ./node_modules/.bin/tsx src/index.ts
-STARTEOF
-chmod +x "$SCRIPT_DIR/start-relay.sh"
 
 systemctl daemon-reload
 systemctl enable alf-relay
