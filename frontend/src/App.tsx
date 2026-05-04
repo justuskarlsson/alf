@@ -5,7 +5,10 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { RepoPage } from "./pages/RepoPage";
 import { TokenGate } from "./core/TokenGate";
 
-const relayUrl = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:3100/client";
+// Dev: VITE_RELAY_URL points to a different port (e.g. ws://localhost:5001/client)
+// Prod: same origin, just derive wss://{host}/client from the page URL
+const relayUrl = import.meta.env.VITE_RELAY_URL
+  ?? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/client`;
 
 // Wrapper forces full re-mount of RepoPage on repo change via key,
 // so useOnConnect in RepoPage registers fresh without needing useEffect deps.
