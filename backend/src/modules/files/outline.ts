@@ -1,10 +1,25 @@
 import type { OutlineSymbol } from "@alf/types";
+import { extractOutlineAST } from "./ast-outline.js";
 
 /**
- * Extract symbols from file content using regex-based heuristics.
- * Detects language from file extension.
+ * Extract symbols from file content.
+ * Uses tree-sitter AST parsing (preferred), falls back to regex heuristics.
  */
-export function extractOutline(content: string, filePath: string): OutlineSymbol[] {
+export async function extractOutline(content: string, filePath: string): Promise<OutlineSymbol[]> {
+  // Try AST-based extraction first
+  try {
+    const result = await extractOutlineAST(content, filePath);
+    if (result !== null) return result;
+  } catch {
+    // Fall through to regex
+  }
+  return extractOutlineRegex(content, filePath);
+}
+
+/**
+ * Regex-based fallback for unsupported languages.
+ */
+function extractOutlineRegex(content: string, filePath: string): OutlineSymbol[] {
   const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
     case "ts": case "tsx": case "js": case "jsx":

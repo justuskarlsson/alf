@@ -17,9 +17,18 @@ importers:
       better-sqlite3:
         specifier: ^11.9.1
         version: 11.10.0
+      prebuilt-tree-sitter-wasm:
+        specifier: ^0.0.2
+        version: 0.0.2
+      tree-sitter-wasm-prebuilt:
+        specifier: ^0.0.3
+        version: 0.0.3
       tsx:
         specifier: ^4.19.3
         version: 4.21.0
+      web-tree-sitter:
+        specifier: ^0.26.8
+        version: 0.26.8
       ws:
         specifier: ^8.18.2
         version: 8.20.0
@@ -947,6 +956,9 @@ packages:
     deprecated: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
     hasBin: true
 
+  prebuilt-tree-sitter-wasm@0.0.2:
+    resolution: {integrity: sha512-U4a2KhVqQuwjlw8kjwCPisjZZv2UrQNrvprCdpBlVHT1xzOaGTeE710IIwSuixnpxybbTNCM7hxYKsJQRvHf7Q==}
+
   proxy-addr@2.0.7:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
@@ -1092,6 +1104,9 @@ packages:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
 
+  tree-sitter-wasm-prebuilt@0.0.3:
+    resolution: {integrity: sha512-asou3mPlm0FqSzXmarzvy9lr4OhokT7shJMfNzmYoLCHHo9xjvWuAtXca0h7b/q6NAREPaC0N6n1VNUzlnO3eA==}
+
   ts-algebra@2.0.0:
     resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
@@ -1207,6 +1222,9 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  web-tree-sitter@0.26.8:
+    resolution: {integrity: sha512-4sUwi7ZyOrIk5KLgYLkc2A/F0LFMQnBhfb+2Cdl7ik4ePJ6JD+fk4ofI2sA5eGawBKBaK4Vntt7Ww5KcEsay4A==}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -2024,6 +2042,8 @@ snapshots:
       tar-fs: 2.1.4
       tunnel-agent: 0.6.0
 
+  prebuilt-tree-sitter-wasm@0.0.2: {}
+
   proxy-addr@2.0.7:
     dependencies:
       forwarded: 0.2.0
@@ -2214,6 +2234,8 @@ snapshots:
 
   toidentifier@1.0.1: {}
 
+  tree-sitter-wasm-prebuilt@0.0.3: {}
+
   ts-algebra@2.0.0: {}
 
   tslib@2.8.1:
@@ -2283,6 +2305,8 @@ snapshots:
       '@types/node': 25.6.0
     transitivePeerDependencies:
       - msw
+
+  web-tree-sitter@0.26.8: {}
 
   which@2.0.2:
     dependencies:

@@ -92,7 +92,7 @@ html, body, #root {
   counter-increment: line;
   content: counter(line);
   display: inline-block;
-  width: 3.5ch;
+  width: var(--line-num-w, 3.5ch);
   margin-right: 1ch;
   text-align: right;
   color: #4a5568;

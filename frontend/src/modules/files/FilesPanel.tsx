@@ -228,6 +228,7 @@ function OutlineSection() {
   const [showFunctions, setShowFunctions] = useState(true);
   const [showClasses, setShowClasses] = useState(true);
   const [showMethods, setShowMethods] = useState(true);
+  const [showTypes, setShowTypes] = useState(true);
   const [showVariables, setShowVariables] = useState(false);
   const [exportsOnly, setExportsOnly] = useState(false);
   const [sortBySize, setSortBySize] = useState(false);
@@ -237,6 +238,7 @@ function OutlineSection() {
     if (!showFunctions && s.kind === "function") return false;
     if (!showClasses && s.kind === "class") return false;
     if (!showMethods && s.kind === "method") return false;
+    if (!showTypes && (s.kind === "interface" || s.kind === "type" || s.kind === "enum")) return false;
     if (!showVariables && s.kind === "variable") return false;
     if (exportsOnly && !s.exported) return false;
     return true;
@@ -264,6 +266,7 @@ function OutlineSection() {
             <FilterBtn label="fn" active={showFunctions} onClick={() => setShowFunctions(v => !v)} />
             <FilterBtn label="class" active={showClasses} onClick={() => setShowClasses(v => !v)} />
             <FilterBtn label="method" active={showMethods} onClick={() => setShowMethods(v => !v)} />
+            <FilterBtn label="type" active={showTypes} onClick={() => setShowTypes(v => !v)} />
             <FilterBtn label="var" active={showVariables} onClick={() => setShowVariables(v => !v)} />
             <FilterBtn label="exports" active={exportsOnly} onClick={() => setExportsOnly(v => !v)} />
             <span className="mx-1 text-slate-700">|</span>
@@ -320,6 +323,9 @@ function kindIcon(kind: string) {
     case "class": return "C";
     case "method": return "m";
     case "variable": return "v";
+    case "interface": return "I";
+    case "type": return "T";
+    case "enum": return "E";
     default: return "?";
   }
 }
@@ -330,6 +336,9 @@ function kindColor(kind: string) {
     case "class": return "text-amber-400";
     case "method": return "text-purple-400";
     case "variable": return "text-green-400";
+    case "interface": return "text-teal-400";
+    case "type": return "text-cyan-400";
+    case "enum": return "text-orange-400";
     default: return "text-slate-400";
   }
 }

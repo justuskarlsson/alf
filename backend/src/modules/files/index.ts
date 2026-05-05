@@ -66,7 +66,7 @@ export class FilesModule {
 
     try {
       const content = await fs.promises.readFile(fullPath, "utf8");
-      const symbols = extractOutline(content, filePath);
+      const symbols = await extractOutline(content, filePath);
       reply({ type: "files/outline", path: filePath, symbols });
     } catch {
       reply({ type: "files/outline", path: filePath, symbols: [] });

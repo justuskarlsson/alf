@@ -17,7 +17,7 @@ export interface FilesGetResponse {
 
 export interface OutlineSymbol {
   name: string;
-  kind: "function" | "class" | "method" | "variable";
+  kind: "function" | "class" | "method" | "variable" | "interface" | "type" | "enum";
   line: number;
   endLine?: number;
   exported: boolean;

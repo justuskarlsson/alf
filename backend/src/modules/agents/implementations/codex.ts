@@ -50,10 +50,16 @@ function parseEffort(model?: string): "low" | "medium" | "high" | "xhigh" {
 export const codexImpl: ImplFn = async (prompt, ctx, emit, signal) => {
   const repoAbsPath = resolve(join(REPOS_ROOT, ctx.repo));
 
+  // Use OAuth (auth.json from `codex login`) by default.
+  // Only pass explicit API key if CODEX_API_KEY is set (not OPENAI_API_KEY,
+  // which is reserved for Whisper and would override OAuth if leaked to subprocess).
+  // Strip OPENAI_API_KEY from inherited env so CLI falls through to auth.json.
+  const { OPENAI_API_KEY: _stripped, ...cleanEnv } = process.env;
   const codex = new Codex({
-    ...(process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : {}),
+    ...(process.env.CODEX_API_KEY ? { apiKey: process.env.CODEX_API_KEY } : {}),
     ...(process.env.OPENAI_BASE_URL ? { baseUrl: process.env.OPENAI_BASE_URL } : {}),
     ...(process.env.CODEX_PATH ? { codexPathOverride: process.env.CODEX_PATH } : {}),
+    env: cleanEnv as Record<string, string>,
   });
 
   const effort = parseEffort(ctx.model);

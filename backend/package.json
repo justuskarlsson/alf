@@ -12,7 +12,10 @@
     "@anthropic-ai/claude-agent-sdk": "0.2.117",
     "@openai/codex-sdk": "^0.128.0",
     "better-sqlite3": "^11.9.1",
+    "prebuilt-tree-sitter-wasm": "^0.0.2",
+    "tree-sitter-wasm-prebuilt": "^0.0.3",
     "tsx": "^4.19.3",
+    "web-tree-sitter": "^0.26.8",
     "ws": "^8.18.2"
   },
   "devDependencies": {

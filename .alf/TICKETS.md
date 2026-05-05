@@ -78,3 +78,11 @@ This avoids reading every file — one tool call returns just the paths that mat
 
 For list views, read only until the closing `---` of the frontmatter block.
 The frontmatter is always complete within the first 600 bytes of a well-formed ticket.
+
+## Board
+
+### Open
+
+| ID | Title | Priority | Epic | Effort |
+|----|-------|----------|------|--------|
+| T-048 | Replace regex-based outline with AST parser (tree-sitter) | medium | files | L |

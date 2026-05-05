@@ -2,12 +2,13 @@
 id: T-046
 title: "Sprint post-fixes — small UI/UX issues"
 type: task
-status: open
+status: done
 priority: medium
 epic: ui
 effort: M
 created: 2026-05-05
 updated: 2026-05-05
+closed: 2026-05-05
 ---
 
 Collection of small fixes and improvements found during post-sprint review.

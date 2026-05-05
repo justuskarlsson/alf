@@ -8,11 +8,11 @@ import { handle, type Reply } from "./dispatch.js";
 
 const log = createLogger("transcription");
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+const OPENAI_API_KEY = process.env.OPENAI_WHISPER_KEY ?? process.env.OPENAI_API_KEY ?? "";
 const WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
 
 if (!OPENAI_API_KEY) {
-  log.warn("OPENAI_API_KEY not set — voice/transcribe will fail");
+  log.warn("OPENAI_WHISPER_KEY not set — voice/transcribe will fail");
 }
 
 export interface TranscriptionResult {
@@ -23,7 +23,7 @@ export interface TranscriptionResult {
 
 export async function transcribeAudio(audioBase64: string, audioFormat: string): Promise<TranscriptionResult> {
   if (!OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY not set — transcription unavailable");
+    throw new Error("OPENAI_WHISPER_KEY not set — transcription unavailable");
   }
 
   const ext = audioFormat === "m4a" ? "m4a" : "webm";
