@@ -1,22 +1,25 @@
-import { execSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import type { FileEntry } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 import { ALF_DIR, REPOS_ROOT } from "../../core/config.js";
 
+const execFileAsync = promisify(execFile);
+
 // Handlers at top — helper functions below are hoisted (function declarations).
 export class FilesModule {
   @handle("files/list")
-  static list(msg: Record<string, unknown>, reply: Reply) {
+  static async list(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const showHidden = msg.showHidden === true;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
-    reply({ type: "files/list", files: listFiles(repo, !showHidden) });
+    reply({ type: "files/list", files: await listFiles(repo, !showHidden) });
   }
 
   @handle("files/get")
-  static get(msg: Record<string, unknown>, reply: Reply) {
+  static async get(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const filePath = msg.path as string | undefined;
     if (!repo || !filePath) { reply({ type: "error", error: "Missing repo or path" }); return; }
@@ -28,19 +31,19 @@ export class FilesModule {
     }
 
     try {
-      // Binary files (images, etc.) must be read as base64 — readFileSync("utf8")
+      // Binary files (images, etc.) must be read as base64 — readFile (no encoding)
       // silently mangles binary data instead of throwing.
       if (isBinaryExt(filePath)) {
-        const content = fs.readFileSync(fullPath).toString("base64");
-        reply({ type: "files/get", content, isBinary: true, path: filePath });
+        const buf = await fs.promises.readFile(fullPath);
+        reply({ type: "files/get", content: buf.toString("base64"), isBinary: true, path: filePath });
         return;
       }
-      const content = fs.readFileSync(fullPath, "utf8");
+      const content = await fs.promises.readFile(fullPath, "utf8");
       reply({ type: "files/get", content, path: filePath });
     } catch {
       try {
-        const content = fs.readFileSync(fullPath).toString("base64");
-        reply({ type: "files/get", content, isBinary: true, path: filePath });
+        const buf = await fs.promises.readFile(fullPath);
+        reply({ type: "files/get", content: buf.toString("base64"), isBinary: true, path: filePath });
       } catch {
         console.error("[files/get] Cannot read file:", fullPath, "repo:", repo, "path:", filePath);
         reply({ type: "error", error: "Cannot read file" });
@@ -55,9 +58,9 @@ export class FilesModule {
 
 // Sorted flat list from git ls-files — respects .gitignore.
 // Reconstructs dir entries from file paths.
-function listFilesGit(repoPath: string): FileEntry[] {
-  const output = execSync("git ls-files", { cwd: repoPath, encoding: "utf8" });
-  const filePaths = output.trim().split("\n").filter(Boolean).sort();
+async function listFilesGit(repoPath: string): Promise<FileEntry[]> {
+  const { stdout } = await execFileAsync("git", ["ls-files"], { cwd: repoPath, encoding: "utf8" });
+  const filePaths = stdout.trim().split("\n").filter(Boolean).sort();
 
   const dirSet = new Set<string>();
   const fileEntries: FileEntry[] = [];
@@ -85,27 +88,27 @@ const SKIP = new Set([".git", "node_modules", "dist", ".next", "__pycache__", ".
 // Dot-dirs allowed in "show hidden" mode
 const DOT_ALLOW = new Set([ALF_DIR]);
 
-function listFilesNaive(repoPath: string): FileEntry[] {
+async function listFilesNaive(repoPath: string): Promise<FileEntry[]> {
   const entries: FileEntry[] = [];
-  function walk(dir: string, rel: string) {
+  async function walk(dir: string, rel: string) {
     let items: fs.Dirent[];
-    try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try { items = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
     for (const item of items.sort((a, b) => a.name.localeCompare(b.name))) {
       if (SKIP.has(item.name)) continue;
       if (item.name.startsWith(".") && !DOT_ALLOW.has(item.name)) continue;
       const itemRel = rel ? `${rel}/${item.name}` : item.name;
       entries.push({ name: item.name, path: itemRel, isDir: item.isDirectory() });
-      if (item.isDirectory()) walk(path.join(dir, item.name), itemRel);
+      if (item.isDirectory()) await walk(path.join(dir, item.name), itemRel);
     }
   }
-  walk(repoPath, "");
+  await walk(repoPath, "");
   return entries;
 }
 
-function listFiles(repo: string, useGit = true): FileEntry[] {
+async function listFiles(repo: string, useGit = true): Promise<FileEntry[]> {
   const repoPath = path.join(REPOS_ROOT, repo);
   if (useGit) {
-    try { return listFilesGit(repoPath); } catch { /* fall through */ }
+    try { return await listFilesGit(repoPath); } catch { /* fall through */ }
   }
   return listFilesNaive(repoPath);
 }

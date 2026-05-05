@@ -15,6 +15,15 @@ export interface FilesGetResponse {
   isBinary?: boolean;
 }
 
+export interface OutlineSymbol {
+  name: string;
+  kind: "function" | "class" | "method" | "variable";
+  line: number;
+  endLine?: number;
+  exported: boolean;
+  parent?: string; // for methods inside classes
+}
+
 // ---------------------------------------------------------------------------
 // Tickets
 // ---------------------------------------------------------------------------

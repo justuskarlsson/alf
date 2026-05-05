@@ -4,6 +4,7 @@ import "react-diff-view/style/index.css";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
+import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 import { Panel, SidebarLayout, CollapsibleSection, EmptyState } from "../../panels/Panel";
 import { useGitStore, type Worktree, type GitCommit } from "./store";
 import { detectLang } from "../../shared/lang";
@@ -32,7 +33,9 @@ export function GitPanel({ repo }: { repo: string }) {
     loadCommits(repo, request);
     request<{ worktrees: Worktree[] }>({ type: "git/worktrees", repo })
       .then(res => setWorktrees(res.worktrees))
-      .catch(console.error);
+      .catch((err) => {
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   });
 
   return (

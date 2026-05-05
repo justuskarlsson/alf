@@ -45,6 +45,7 @@ export function FilesPanel({ repo }: { repo: string }) {
 function FilesSidebar({ repo }: { repo: string }) {
   const { request } = useRelay();
   const files = useFilesStore(s => s.files);
+  const filesLoading = useFilesStore(s => s.filesLoading);
   const { showHidden, setShowHidden } = useFilesStore(useShallow(s => ({
     showHidden: s.showHidden,
     setShowHidden: s.setShowHidden,
@@ -60,7 +61,7 @@ function FilesSidebar({ repo }: { repo: string }) {
     return () => obs.disconnect();
   }, []);
 
-  if (files.length === 0) return <EmptyState message="Loading…" />;
+  if (files.length === 0 && filesLoading) return <EmptyState message="Loading…" />;
 
   return (
     <Panel>

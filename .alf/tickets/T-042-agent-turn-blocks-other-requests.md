@@ -2,12 +2,12 @@
 id: T-042
 title: "Agent turn makes other panels sluggish — possible blocking"
 type: bug
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-05-05
 ---
 
 While a Claude Code agent turn is running, other panels (git diffs, file viewer) become very slow to load from the backend. Suggests the agent turn may be blocking the event loop or starving other request handlers.

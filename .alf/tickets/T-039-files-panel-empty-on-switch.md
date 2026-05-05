@@ -2,12 +2,12 @@
 id: T-039
 title: "Files panel sometimes empty (not after refresh)"
 type: bug
-status: open
+status: done
 priority: medium
 epic: files
 effort: S
 created: 2026-04-29
-updated: 2026-04-29
+updated: 2026-05-05
 ---
 
 The FILES section in the file panel sometimes shows empty — no file tree. Does NOT happen on fresh page load, only after some interaction (switching repos? switching panels? collapsing/expanding?).

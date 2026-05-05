@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Worktree, GitCommit } from "@alf/types";
+import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 
 export type { Worktree, GitCommit };
 
@@ -14,6 +15,7 @@ interface GitStore {
   selectedWorktree: Worktree | null;
   setSelectedWorktree: (wt: Worktree | null) => void;
   changedFiles: string[];
+  changedFilesLoading: boolean;
   selectedDiffFile: string | null;
   diff: string | null;
   loadChangedFiles: (repo: string, request: WsRequest) => void;
@@ -34,13 +36,17 @@ export const useGitStore = create<GitStore>((set) => ({
   selectedWorktree: null,
   setSelectedWorktree: (wt) => set({ selectedWorktree: wt }),
   changedFiles: [],
+  changedFilesLoading: false,
   selectedDiffFile: null,
   diff: null,
   loadChangedFiles: (repo, request) => {
-    set({ changedFiles: [] });
+    set({ changedFilesLoading: true });
     request<{ files: string[] }>({ type: "git/changed-files", repo })
-      .then(res => set({ changedFiles: res.files }))
-      .catch(console.error);
+      .then(res => set({ changedFiles: res.files, changedFilesLoading: false }))
+      .catch((err) => {
+        set({ changedFilesLoading: false });
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
   loadDiff: (repo, file, request) => {
     set({ diff: null, selectedDiffFile: file });
@@ -48,7 +54,9 @@ export const useGitStore = create<GitStore>((set) => ({
     if (file) msg.file = file;
     request<{ diff: string }>(msg)
       .then(res => set({ diff: res.diff }))
-      .catch(console.error);
+      .catch((err) => {
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
 
   // Commit history
@@ -58,7 +66,9 @@ export const useGitStore = create<GitStore>((set) => ({
   loadCommits: (repo, request) => {
     request<{ commits: GitCommit[] }>({ type: "git/commits", repo })
       .then(res => set({ commits: res.commits }))
-      .catch(console.error);
+      .catch((err) => {
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
   selectDiffBase: (base, repo, request) => {
     set({ diffBase: base, selectedDiffFile: null, diff: null, commitDiffFiles: [] });
@@ -66,23 +76,33 @@ export const useGitStore = create<GitStore>((set) => ({
       // Reuse existing loadChangedFiles + loadDiff for the all-changes view
       request<{ files: string[] }>({ type: "git/changed-files", repo })
         .then(res => set({ changedFiles: res.files }))
-        .catch(console.error);
+        .catch((err) => {
+          if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+        });
       request<{ diff: string }>({ type: "git/diff", repo })
         .then(res => set({ diff: res.diff }))
-        .catch(console.error);
+        .catch((err) => {
+          if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+        });
     } else {
       request<{ files: string[] }>({ type: "git/commit/diff/files", repo, sha: base })
         .then(res => set({ commitDiffFiles: res.files }))
-        .catch(console.error);
+        .catch((err) => {
+          if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+        });
       request<{ diff: string }>({ type: "git/commit/diff", repo, sha: base })
         .then(res => set({ diff: res.diff }))
-        .catch(console.error);
+        .catch((err) => {
+          if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+        });
     }
   },
   loadCommitDiff: (sha, file, repo, request) => {
     set({ diff: null, selectedDiffFile: file });
     request<{ diff: string }>({ type: "git/commit/diff", repo, sha, ...(file ? { file } : {}) })
       .then(res => set({ diff: res.diff }))
-      .catch(console.error);
+      .catch((err) => {
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
 }));

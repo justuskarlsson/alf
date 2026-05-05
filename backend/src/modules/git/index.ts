@@ -1,17 +1,20 @@
-import { execSync, spawnSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import path from "path";
 import type { Worktree, GitCommit } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 import { REPOS_ROOT } from "../../core/config.js";
 
+const execFileAsync = promisify(execFile);
+
 // Handlers at top — helpers below are hoisted (function declarations).
 export class GitModule {
   @handle("git/worktrees")
-  static worktrees(msg: Record<string, unknown>, reply: Reply) {
+  static async worktrees(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     try {
-      const raw = execSync("git worktree list --porcelain", { cwd: repoPath(repo), encoding: "utf8" });
+      const raw = await git(repoPath(repo), ["worktree", "list", "--porcelain"]);
       reply({ type: "git/worktrees", worktrees: parseWorktrees(raw) });
     } catch {
       reply({ type: "git/worktrees", worktrees: [] });
@@ -19,21 +22,21 @@ export class GitModule {
   }
 
   @handle("git/changed-files")
-  static changedFiles(msg: Record<string, unknown>, reply: Reply) {
+  static async changedFiles(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     try {
       // --porcelain covers modified, staged, untracked (??), deleted, etc.
       // Untracked directories show as "?? dir/" — expand to individual files.
       const cwd = repoPath(repo);
-      const raw = execSync("git status --porcelain", { cwd, encoding: "utf8" });
+      const raw = await git(cwd, ["status", "--porcelain"]);
       const files: string[] = [];
       for (const line of raw.split("\n").filter(Boolean)) {
         const entry = line.slice(3).trim();
         if (!entry || entry === "/dev/null") continue;
         if (entry.endsWith("/")) {
           // Untracked directory — expand to individual files
-          const expanded = git(cwd, ["ls-files", "--others", "--exclude-standard", "--", entry]);
+          const expanded = await git(cwd, ["ls-files", "--others", "--exclude-standard", "--", entry]);
           for (const f of expanded.split("\n").filter(Boolean)) files.push(f);
         } else {
           files.push(entry);
@@ -46,23 +49,23 @@ export class GitModule {
   }
 
   @handle("git/diff")
-  static diff(msg: Record<string, unknown>, reply: Reply) {
+  static async diff(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const file = msg.file as string | undefined;
     const branch = msg.branch as string | undefined;
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
-    const diff = buildDiff(repoPath(repo), file ?? null, branch ?? null);
+    const diff = await buildDiff(repoPath(repo), file ?? null, branch ?? null);
     reply({ type: "git/diff", diff, file: file ?? null });
   }
 
   /** List recent commits (subject + date, no author). */
   @handle("git/commits")
-  static commits(msg: Record<string, unknown>, reply: Reply) {
+  static async commits(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const limit = Number(msg.limit ?? 20);
     if (!repo) { reply({ type: "error", error: "Missing repo" }); return; }
     try {
-      const raw = git(repoPath(repo), [
+      const raw = await git(repoPath(repo), [
         "log", `--max-count=${limit}`,
         "--format=%H\x1f%s\x1f%ci",
       ]);
@@ -78,12 +81,12 @@ export class GitModule {
 
   /** List files changed in a single commit (sha^..sha). */
   @handle("git/commit/diff/files")
-  static commitDiffFiles(msg: Record<string, unknown>, reply: Reply) {
+  static async commitDiffFiles(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const sha = msg.sha as string | undefined;
     if (!repo || !sha) { reply({ type: "error", error: "Missing repo or sha" }); return; }
     try {
-      const raw = git(repoPath(repo), ["diff", "--name-only", `${sha}^..${sha}`]);
+      const raw = await git(repoPath(repo), ["diff", "--name-only", `${sha}^..${sha}`]);
       const files = raw.split("\n").filter(Boolean);
       reply({ type: "git/commit/diff/files", files, sha });
     } catch {
@@ -93,7 +96,7 @@ export class GitModule {
 
   /** Unified diff for a commit (sha^..sha), optionally filtered to a single file. */
   @handle("git/commit/diff")
-  static commitDiff(msg: Record<string, unknown>, reply: Reply) {
+  static async commitDiff(msg: Record<string, unknown>, reply: Reply) {
     const repo = msg.repo as string | undefined;
     const sha = msg.sha as string | undefined;
     const file = msg.file as string | undefined;
@@ -102,7 +105,7 @@ export class GitModule {
       const args = file
         ? ["diff", "--no-color", "-U5", `${sha}^..${sha}`, "--", file]
         : ["diff", "--no-color", "-U5", `${sha}^..${sha}`];
-      const diff = git(repoPath(repo), args);
+      const diff = await git(repoPath(repo), args);
       reply({ type: "git/commit/diff", diff, sha, file: file ?? null });
     } catch {
       reply({ type: "git/commit/diff", diff: "", sha: sha ?? "", file: file ?? null });
@@ -118,35 +121,45 @@ function repoPath(repo: string): string {
   return path.join(REPOS_ROOT, repo);
 }
 
-function buildDiff(cwd: string, file: string | null, branch: string | null): string {
+async function buildDiff(cwd: string, file: string | null, branch: string | null): Promise<string> {
   if (file) {
     // Untracked file: diff against /dev/null to show full content as additions.
-    if (isUntracked(cwd, file)) return untrackedDiff(cwd, file);
+    if (await isUntracked(cwd, file)) return await untrackedDiff(cwd, file);
     const args = ["diff", "--no-color", "-U5", branch ?? "HEAD", "--", file];
-    return git(cwd, args);
+    return await git(cwd, args);
   }
   // All changes: everything vs HEAD + untracked files as new-file diffs.
-  const tracked = git(cwd, ["diff", "--no-color", "-U5", "HEAD"]);
-  const newFiles = git(cwd, ["ls-files", "--others", "--exclude-standard"])
-    .split("\n").filter(Boolean)
-    .map(f => untrackedDiff(cwd, f));
+  const tracked = await git(cwd, ["diff", "--no-color", "-U5", "HEAD"]);
+  const untrackedFiles = (await git(cwd, ["ls-files", "--others", "--exclude-standard"]))
+    .split("\n").filter(Boolean);
+  const newFiles = await Promise.all(untrackedFiles.map(f => untrackedDiff(cwd, f)));
   return [tracked, ...newFiles].filter(Boolean).join("\n");
 }
 
-function isUntracked(cwd: string, file: string): boolean {
-  return git(cwd, ["status", "--porcelain", "--", file]).trimStart().startsWith("??");
+async function isUntracked(cwd: string, file: string): Promise<boolean> {
+  return (await git(cwd, ["status", "--porcelain", "--", file])).trimStart().startsWith("??");
 }
 
-// spawnSync so file paths with spaces are safe. --no-index exits 1 when files
-// differ (always the case vs /dev/null) so stdout is on the error object.
-function untrackedDiff(cwd: string, file: string): string {
-  const res = spawnSync("git", ["diff", "--no-index", "--no-color", "-U5", "/dev/null", file], { cwd, encoding: "utf8" });
-  return res.stdout ?? "";
+// --no-index exits 1 when files differ (always the case vs /dev/null)
+// so stdout comes from the rejected error object.
+async function untrackedDiff(cwd: string, file: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", ["diff", "--no-index", "--no-color", "-U5", "/dev/null", file], { cwd, encoding: "utf8" });
+    return stdout ?? "";
+  } catch (err: unknown) {
+    // exit code 1 means files differ — stdout is on the error object
+    const e = err as { stdout?: string };
+    return e.stdout ?? "";
+  }
 }
 
-function git(cwd: string, args: string[]): string {
-  const res = spawnSync("git", args, { cwd, encoding: "utf8" });
-  return res.stdout ?? "";
+async function git(cwd: string, args: string[]): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", args, { cwd, encoding: "utf8" });
+    return stdout ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function parseWorktrees(raw: string): Worktree[] {

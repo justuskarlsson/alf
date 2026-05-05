@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
+import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
 import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
@@ -113,7 +114,9 @@ export function TicketsPanel({ repo }: { repo: string }) {
     setTickets([]);
     request<{ tickets: TicketMeta[] }>({ type: "tickets/list", repo })
       .then(res => setTickets(res.tickets))
-      .catch(console.error);
+      .catch((err) => {
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   });
 
   return (

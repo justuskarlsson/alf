@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { FileEntry } from "@alf/types";
+import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 import { storage } from "../../core/storage";
 
 export type { FileEntry };
@@ -8,6 +9,7 @@ type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
 
 interface FilesStore {
   files: FileEntry[];
+  filesLoading: boolean;
   setFiles: (files: FileEntry[]) => void;
   selectedFile: string | null;
   setSelectedFile: (path: string | null) => void;
@@ -26,6 +28,7 @@ interface FilesStore {
 
 export const useFilesStore = create<FilesStore>((set) => ({
   files: [],
+  filesLoading: false,
   setFiles: (files) => set({ files }),
   selectedFile: null,
   setSelectedFile: (path) => set({ selectedFile: path }),
@@ -35,10 +38,13 @@ export const useFilesStore = create<FilesStore>((set) => ({
   setIsBinary: (v) => set({ isBinary: v }),
   showHidden: false,
   setShowHidden: (v, repo, request) => {
-    set({ showHidden: v });
+    set({ showHidden: v, filesLoading: true });
     request<{ files: FileEntry[] }>({ type: "files/list", repo, showHidden: v })
-      .then(res => set({ files: res.files }))
-      .catch(console.error);
+      .then(res => set({ files: res.files, filesLoading: false }))
+      .catch((err) => {
+        set({ filesLoading: false });
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
   starred: [],
   loadStarred: (repo) => set({ starred: storage.get<string[]>(`starred:${repo}`) ?? [] }),
@@ -55,9 +61,12 @@ export const useFilesStore = create<FilesStore>((set) => ({
   }),
   listFiles: (repo, request) => {
     const showHidden = useFilesStore.getState().showHidden;
-    set({ files: [], selectedFile: null, fileContent: null, isBinary: false });
+    set({ filesLoading: true, selectedFile: null, fileContent: null, isBinary: false });
     request<{ files: FileEntry[] }>({ type: "files/list", repo, showHidden })
-      .then(res => set({ files: res.files }))
-      .catch(console.error);
+      .then(res => set({ files: res.files, filesLoading: false }))
+      .catch((err) => {
+        set({ filesLoading: false });
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
 }));

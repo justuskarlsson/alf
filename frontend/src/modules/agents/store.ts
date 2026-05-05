@@ -3,6 +3,7 @@ import type {
   AgentSession, AgentTurn, AgentActivity, AgentDelta, AgentLastCoord,
   AgentSubscribeMsg, AgentUnsubscribeMsg, ContextUsage,
 } from "@alf/types";
+import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 
 type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
 
@@ -88,7 +89,9 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     });
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
       .then(res => set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) }))
-      .catch(console.error);
+      .catch((err) => {
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
   },
 
   selectSession: (id, request) => {
