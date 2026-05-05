@@ -11,6 +11,20 @@ export default defineConfig({
       workbox: {
         clientsClaim: true,
         skipWaiting: true,
+        // Minimal precache — just the HTML shell + icons. All JS/CSS
+        // loads via runtime caching so the SW install is instant.
+        globPatterns: ["**/*.html", "**/*.png"],
+        navigateFallback: "/index.html",
+        runtimeCaching: [
+          {
+            urlPattern: /\.(?:js|css)$/,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "assets",
+              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
       },
       manifest: {
         name: "Alf",

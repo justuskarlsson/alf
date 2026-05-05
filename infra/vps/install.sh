@@ -178,6 +178,17 @@ server {
     root $REPO_ROOT/frontend/dist;
     index index.html;
 
+    # PWA — service worker: no cache, correct scope
+    location = /sw.js {
+        add_header Cache-Control "no-cache";
+        add_header Service-Worker-Allowed "/";
+    }
+
+    # PWA — manifest MIME type (nginx doesn't know .webmanifest)
+    location = /manifest.webmanifest {
+        types { application/manifest+json webmanifest; }
+    }
+
     # SPA fallback
     location / {
         try_files \$uri \$uri/ /index.html;
