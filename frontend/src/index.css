@@ -83,3 +83,27 @@ html, body, #root {
 .alf-shiki code {
   background: transparent !important;
 }
+
+/* Line numbers via CSS counters */
+.alf-shiki pre code {
+  counter-reset: line;
+}
+.alf-shiki pre code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3.5ch;
+  margin-right: 1ch;
+  text-align: right;
+  color: #4a5568;
+  user-select: none;
+}
+
+/* Outline click-to-scroll highlight animation */
+.alf-shiki .line {
+  transition: background-color 0.5s ease-out;
+}
+.alf-line-highlight {
+  background-color: rgba(234, 179, 8, 0.25);
+  transition: background-color 1.5s ease-out;
+}

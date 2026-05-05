@@ -254,6 +254,28 @@ export function RepoPage({ repo }: Props) {
       .catch(console.error);
   });
 
+  // Item 10: reduce base font size on mobile (~25% reduction) so rem-based UI scales down
+  useEffect(() => {
+    if (isMobile) {
+      document.documentElement.style.fontSize = "9px";
+    } else {
+      document.documentElement.style.fontSize = "";
+    }
+    return () => { document.documentElement.style.fontSize = ""; };
+  }, [isMobile]);
+
+  // Item 9: Build panel list with ALL registered panel types for mobile view
+  // Agents first, then the rest in registry order.
+  const MOBILE_ORDER: PanelType[] = ["agents", "files", "tickets", "git"];
+  const allPanels: PanelInstance[] = MOBILE_ORDER
+    .filter(type => type in PANEL_TYPES)
+    .map(type => ({
+      id: `mobile-${type}`,
+      type,
+      title: PANEL_TYPES[type].label,
+      args: {},
+    }));
+
   const rowHeight = Math.max(Math.floor((dims.h - MARGIN * (ROWS + 1)) / ROWS), 20);
 
   return (
@@ -316,7 +338,7 @@ export function RepoPage({ repo }: Props) {
       {isMobile ? (
         <div className="flex-1 min-h-0">
           <MobileSwipeView
-            panels={panels}
+            panels={allPanels}
             repo={repo}
             renderPanel={renderPanelContent}
           />

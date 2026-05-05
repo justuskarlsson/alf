@@ -172,13 +172,14 @@ function ContextUsageIndicator({ usage }: { usage: ContextUsage }) {
 function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
   const {
-    selectedSessionId, turns, activities, live, isRunning, pendingPrompt,
+    selectedSessionId, turns, activities, hiddenCounts, live, isRunning, pendingPrompt,
     forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
     contextUsage,
   } = useAgentsStore(useShallow(s => ({
     selectedSessionId: s.selectedSessionId,
     turns: s.turns,
     activities: s.activities,
+    hiddenCounts: s.hiddenCounts,
     live: s.live,
     isRunning: s.isRunning,
     pendingPrompt: s.pendingPrompt,
@@ -237,6 +238,7 @@ function ChatView({ repo }: { repo: string }) {
       <ChatFeed
         turns={turns}
         activities={activities}
+        hiddenCounts={hiddenCounts}
         live={live}
         pendingPrompt={pendingPrompt}
         selectedSessionId={selectedSessionId}
@@ -247,17 +249,18 @@ function ChatView({ repo }: { repo: string }) {
   );
 }
 
-/** Memoized feed — only re-renders when turns/activities/live/pendingPrompt change. */
-const ChatFeed = React.memo(function ChatFeed({ turns, activities, live, pendingPrompt, selectedSessionId }: {
+/** Memoized feed — only re-renders when turns/activities/live/pendingPrompt/hiddenCounts change. */
+const ChatFeed = React.memo(function ChatFeed({ turns, activities, hiddenCounts, live, pendingPrompt, selectedSessionId }: {
   turns: AgentTurn[];
   activities: AgentActivity[];
+  hiddenCounts: Record<string, number>;
   live: LiveState | null;
   pendingPrompt: string | null;
   selectedSessionId: string;
 }) {
   const feed = useMemo(
-    () => buildFeed(turns, activities, live, pendingPrompt),
-    [turns, activities, live, pendingPrompt]
+    () => buildFeed(turns, activities, hiddenCounts, live, pendingPrompt),
+    [turns, activities, hiddenCounts, live, pendingPrompt]
   );
   return (
     <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed" data-alf-ctx-session={selectedSessionId}>
@@ -529,7 +532,8 @@ function ChatComposer() {
 
 type FeedItemData =
   | { kind: "user"; prompt: string; id: string }
-  | { kind: "activity"; activityType: string; content: string; live?: boolean; id: string };
+  | { kind: "activity"; activityType: string; content: string; live?: boolean; id: string }
+  | { kind: "turn-expand"; turnId: string; hiddenCount: number; id: string };
 
 const FeedItem = React.memo(function FeedItem({ item }: { item: FeedItemData }) {
   if (item.kind === "user") {
@@ -538,6 +542,10 @@ const FeedItem = React.memo(function FeedItem({ item }: { item: FeedItemData }) 
         <p className="font-mono text-sm text-slate-200 whitespace-pre-wrap">{item.prompt}</p>
       </div>
     );
+  }
+
+  if (item.kind === "turn-expand") {
+    return <TurnExpandItem turnId={item.turnId} hiddenCount={item.hiddenCount} />;
   }
 
   const isText = item.activityType === "text";
@@ -565,6 +573,58 @@ const FeedItem = React.memo(function FeedItem({ item }: { item: FeedItemData }) 
     </div>
   );
 });
+
+/** Expand control for hidden (non-text) activities in a completed turn. */
+function TurnExpandItem({ turnId, hiddenCount }: { turnId: string; hiddenCount: number }) {
+  const { request } = useRelay();
+  const [expanded, setExpanded] = useState(false);
+  const [activities, setActivities] = useState<AgentActivity[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleToggle() {
+    if (expanded) { setExpanded(false); return; }
+    setExpanded(true);
+    if (activities) return; // already fetched
+    setLoading(true);
+    try {
+      const res = await request<{ activities: AgentActivity[] }>({ type: "agent/turn/activities", turnId });
+      // Keep only non-text activities (text are already shown in the feed)
+      setActivities(res.activities.filter(a => a.type !== "text"));
+    } catch (err) {
+      console.error("Failed to fetch turn activities:", err);
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="font-mono text-xs">
+      <button
+        onClick={handleToggle}
+        className="text-slate-600 hover:text-slate-400 transition-colors py-0.5"
+        data-testid="turn-expand-btn"
+      >
+        {expanded ? "Hide" : `Show ${hiddenCount} tool/thinking ${hiddenCount === 1 ? "activity" : "activities"}`}
+      </button>
+      {expanded && (
+        <div className="mt-1 flex flex-col gap-1">
+          {loading && <span className="text-slate-600 animate-pulse">Loading...</span>}
+          {activities?.map(act => (
+            <div
+              key={act.id}
+              data-activity-type={act.type}
+              className={`rounded px-3 py-1.5
+                ${act.type === "thinking" ? "text-slate-500 bg-alf-canvas/50" : ""}
+                ${act.type === "tool" ? "text-amber-400/70 bg-alf-canvas/50" : ""}`}
+            >
+              <span className="text-xs text-slate-600 mr-2 uppercase">[{act.type}]</span>
+              <span className="whitespace-pre-wrap">{act.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AgentsPanel({ repo }: { repo: string }) {
   const { subscribe, request } = useRelay();
@@ -602,6 +662,7 @@ export function AgentsPanel({ repo }: { repo: string }) {
 function buildFeed(
   turns: AgentTurn[],
   activities: AgentActivity[],
+  hiddenCounts: Record<string, number>,
   live: LiveState | null,
   pendingPrompt: string | null,
 ): FeedItemData[] {
@@ -614,7 +675,7 @@ function buildFeed(
     items.push({ kind: "user", prompt: pendingPrompt, id: "pending" });
   }
 
-  // Build activity index: turn_id -> activities (sorted by idx, reversed for display)
+  // Build activity index: turn_id -> text activities (sorted by idx, reversed for display)
   const activityMap = new Map<string, AgentActivity[]>();
   for (const a of activities) {
     let list = activityMap.get(a.turn_id);
@@ -631,6 +692,13 @@ function buildFeed(
     for (const act of turnActivities) {
       items.push({ kind: "activity", activityType: act.type, content: act.content, id: act.id });
     }
+
+    // Show expand control if there are hidden (non-text) activities for this turn
+    const hc = hiddenCounts[turn.id];
+    if (hc && hc > 0) {
+      items.push({ kind: "turn-expand", turnId: turn.id, hiddenCount: hc, id: `expand-${turn.id}` });
+    }
+
     items.push({ kind: "user", prompt: turn.prompt, id: turn.id });
   }
 

@@ -288,6 +288,13 @@ export const dbActivities = {
     `).all(sessionId) as Activity[];
   },
 
+  /** All activities for a single turn, ordered by idx. Used for on-demand expand. */
+  listForTurn(turnId: string): Activity[] {
+    return getDb()
+      .prepare("SELECT * FROM activities WHERE turn_id = ? ORDER BY idx ASC")
+      .all(turnId) as Activity[];
+  },
+
   /** Last position in the session — used to anchor replay. Null if no activities yet. */
   lastCoord(sessionId: string): { turnIdx: number; activityIdx: number } | null {
     const row = getDb().prepare(`

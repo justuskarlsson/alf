@@ -9,6 +9,7 @@ import { Panel, PanelHeader, SidebarLayout, CollapsibleSection, EmptyState } fro
 import { FileContentPanel } from "./FileContentPanel";
 import { useFilesStore, type FileEntry } from "./store";
 
+
 // ---------------------------------------------------------------------------
 // Top-level export — entry point for this module.
 // ---------------------------------------------------------------------------
@@ -75,6 +76,7 @@ function FilesSidebar({ repo }: { repo: string }) {
         >{showHidden ? "⦿ hidden" : "○ hidden"}</button>
       </PanelHeader>
       <StarredSection />
+      <OutlineSection />
       <CollapsibleSection title="Files" fill>
         <div ref={containerRef} className="h-full">
           <Tree
@@ -123,8 +125,8 @@ function StarredSection() {
   const treeData = buildTree(included);
 
   return (
-    <CollapsibleSection title="Starred" fill>
-      <div ref={containerRef} className="h-full">
+    <CollapsibleSection title="Starred">
+      <div ref={containerRef} className="overflow-auto max-h-64">
         <Tree
           data={treeData}
           openByDefault={true}
@@ -210,6 +212,126 @@ function useOpenFile() {
       .catch(console.error);
     loadOutline(repo, filePath, request);
   };
+}
+
+// ---------------------------------------------------------------------------
+// Outline section — collapsible symbol list with click-to-scroll
+// ---------------------------------------------------------------------------
+
+function OutlineSection() {
+  const { outlineSymbols, outlineLoading, selectedFile } = useFilesStore(useShallow(s => ({
+    outlineSymbols: s.outlineSymbols,
+    outlineLoading: s.outlineLoading,
+    selectedFile: s.selectedFile,
+  })));
+
+  const [showFunctions, setShowFunctions] = useState(true);
+  const [showClasses, setShowClasses] = useState(true);
+  const [showMethods, setShowMethods] = useState(true);
+  const [showVariables, setShowVariables] = useState(false);
+  const [exportsOnly, setExportsOnly] = useState(false);
+  const [sortBySize, setSortBySize] = useState(false);
+
+  // Filter and sort
+  let filtered = outlineSymbols.filter(s => {
+    if (!showFunctions && s.kind === "function") return false;
+    if (!showClasses && s.kind === "class") return false;
+    if (!showMethods && s.kind === "method") return false;
+    if (!showVariables && s.kind === "variable") return false;
+    if (exportsOnly && !s.exported) return false;
+    return true;
+  });
+
+  if (sortBySize) {
+    filtered = [...filtered].sort((a, b) => ((b.endLine ?? b.line) - b.line) - ((a.endLine ?? a.line) - a.line));
+  }
+
+  const empty = !selectedFile
+    ? "Select a file"
+    : outlineLoading
+      ? "Loading…"
+      : outlineSymbols.length === 0
+        ? "No symbols"
+        : null;
+
+  return (
+    <CollapsibleSection title="Outline" defaultOpen={false}>
+      {empty ? (
+        <div className="px-2 py-2 text-xs text-slate-600 font-mono">{empty}</div>
+      ) : (
+        <>
+          <div className="px-2 py-1 flex gap-1 flex-wrap text-[10px] font-mono">
+            <FilterBtn label="fn" active={showFunctions} onClick={() => setShowFunctions(v => !v)} />
+            <FilterBtn label="class" active={showClasses} onClick={() => setShowClasses(v => !v)} />
+            <FilterBtn label="method" active={showMethods} onClick={() => setShowMethods(v => !v)} />
+            <FilterBtn label="var" active={showVariables} onClick={() => setShowVariables(v => !v)} />
+            <FilterBtn label="exports" active={exportsOnly} onClick={() => setExportsOnly(v => !v)} />
+            <span className="mx-1 text-slate-700">|</span>
+            <FilterBtn label={sortBySize ? "size" : "line"} active={sortBySize} onClick={() => setSortBySize(v => !v)} />
+          </div>
+          <div className="overflow-auto max-h-48">
+            {filtered.map((sym, i) => (
+              <button
+                key={`${sym.name}-${sym.line}-${i}`}
+                onClick={() => scrollToLine(sym.line)}
+                className="w-full text-left px-2 py-0.5 flex items-center gap-1.5 hover:bg-alf-surface transition-colors text-xs font-mono"
+              >
+                <span className={`w-4 text-center ${kindColor(sym.kind)}`}>{kindIcon(sym.kind)}</span>
+                <span className="text-slate-300 truncate flex-1">
+                  {sym.parent ? <span className="text-slate-600">{sym.parent}.</span> : null}
+                  {sym.name}
+                </span>
+                <span className="text-slate-600 tabular-nums">{sym.line}</span>
+                {sym.endLine && <span className="text-slate-700 tabular-nums text-[9px]">({sym.endLine - sym.line}L)</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </CollapsibleSection>
+  );
+}
+
+function scrollToLine(line: number) {
+  const container = document.querySelector(".alf-shiki");
+  if (!container) return;
+  const lines = container.querySelectorAll(":scope > pre > code > .line, :scope > pre > code > span");
+  const target = lines[line - 1]; // 1-based to 0-based
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Add highlight
+  (target as HTMLElement).classList.add("alf-line-highlight");
+  setTimeout(() => (target as HTMLElement).classList.remove("alf-line-highlight"), 1500);
+}
+
+function FilterBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-1.5 py-0.5 rounded transition-colors
+        ${active ? "bg-alf-surface text-slate-300" : "text-slate-600 hover:text-slate-400"}`}
+    >{label}</button>
+  );
+}
+
+function kindIcon(kind: string) {
+  switch (kind) {
+    case "function": return "fn";
+    case "class": return "C";
+    case "method": return "m";
+    case "variable": return "v";
+    default: return "?";
+  }
+}
+
+function kindColor(kind: string) {
+  switch (kind) {
+    case "function": return "text-sky-400";
+    case "class": return "text-amber-400";
+    case "method": return "text-purple-400";
+    case "variable": return "text-green-400";
+    default: return "text-slate-400";
+  }
 }
 
 // ---------------------------------------------------------------------------

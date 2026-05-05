@@ -203,6 +203,15 @@ export class AgentsModule {
     reply({ type: "agent/session/update", ok: true });
   }
 
+  /** Return all activities for a specific turn (on-demand expand). */
+  @handle("agent/turn/activities")
+  static turnActivities(msg: Record<string, unknown>, reply: Reply) {
+    const { turnId } = msg as { turnId?: string };
+    if (!turnId) { reply({ type: "agent/turn/activities", error: "turnId required" }); return; }
+    const activities = dbActivities.listForTurn(turnId);
+    reply({ type: "agent/turn/activities", activities });
+  }
+
   /** Full turn + activity history for a session, with optional replay (lastActivityIdx). */
   @handle("agent/session/detail")
   static detail(msg: Record<string, unknown>, reply: Reply) {

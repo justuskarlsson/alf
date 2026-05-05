@@ -61,11 +61,13 @@ export function CollapsibleSection({
         <span className="w-3 text-center opacity-60">{open ? "▾" : "▸"}</span>
         {title}
       </button>
-      {open && (
-        <div className={fill ? "flex-1 min-h-0 overflow-hidden" : ""}>
-          {children}
-        </div>
-      )}
+      <div className={
+        fill
+          ? (open ? "flex-1 min-h-0 overflow-hidden" : "shrink-0 h-0 overflow-hidden")
+          : (open ? "" : "hidden")
+      }>
+        {children}
+      </div>
     </div>
   );
 }

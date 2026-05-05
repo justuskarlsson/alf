@@ -126,6 +126,16 @@ function extractTS(content: string): OutlineSymbol[] {
     }
   }
 
+  // Post-process: compute endLine for top-level symbols that lack it,
+  // using "next symbol at same scope" heuristic.
+  for (let si = 0; si < symbols.length; si++) {
+    const sym = symbols[si];
+    if (sym.endLine) continue; // already set (e.g. classes)
+    if (sym.parent) continue;  // methods handled by class scope
+    const next = symbols.find((s, j) => j > si && !s.parent);
+    sym.endLine = next ? next.line - 1 : lines.length;
+  }
+
   return symbols;
 }
 

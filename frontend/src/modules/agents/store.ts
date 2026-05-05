@@ -7,6 +7,25 @@ import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 
 type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
 
+// ---------------------------------------------------------------------------
+// Persisted session helpers (keyed by repo)
+// ---------------------------------------------------------------------------
+const SESSION_STORAGE_KEY = "alf-agent-session";
+function getPersistedSession(repo: string): string | null {
+  try {
+    const map = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "{}");
+    return map[repo] ?? null;
+  } catch { return null; }
+}
+function setPersistedSession(repo: string, sessionId: string | null) {
+  try {
+    const map = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "{}");
+    if (sessionId) map[repo] = sessionId;
+    else delete map[repo];
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
 interface DetailResponse {
   session: AgentSession;
   turns: AgentTurn[];
@@ -33,8 +52,10 @@ export const MODEL_OPTIONS: Record<string, string[]> = {
 interface AgentsStore {
   sessions: AgentSession[];
   selectedSessionId: string | null;
+  currentRepo: string | null; // repo currently loaded (set by loadSessions)
   turns: AgentTurn[];
-  activities: AgentActivity[];
+  activities: AgentActivity[]; // only text activities for completed turns
+  hiddenCounts: Record<string, number>; // turnId → count of non-text activities (for expand UI)
   live: LiveState | null;
   isRunning: boolean;
   pendingPrompt: string | null; // prompt sent but turn not yet done
@@ -62,8 +83,10 @@ interface AgentsStore {
 export const useAgentsStore = create<AgentsStore>((set, get) => ({
   sessions: [],
   selectedSessionId: null,
+  currentRepo: null,
   turns: [],
   activities: [],
+  hiddenCounts: {},
   live: null,
   isRunning: false,
   pendingPrompt: null,
@@ -84,8 +107,10 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     set({
       sessions: [],
       selectedSessionId: null,
+      currentRepo: repo,
       turns: [],
       activities: [],
+      hiddenCounts: {},
       live: null,
       isRunning: false,
       pendingPrompt: null,
@@ -93,7 +118,14 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       lastCoord: null,
     });
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
-      .then(res => set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) }))
+      .then(res => {
+        set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) });
+        // Auto-restore persisted session for this repo
+        const persisted = getPersistedSession(repo);
+        if (persisted && res.sessions.some(s => s.id === persisted)) {
+          get().selectSession(persisted, request);
+        }
+      })
       .catch((err) => {
         if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
       });
@@ -106,9 +138,15 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     }
     const map = { ...get().lastSeenMap, [id]: Date.now() };
     localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
-    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
+    set(s => ({ selectedSessionId: id, turns: [], activities: [], hiddenCounts: {}, live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
+    // Persist selected session for the current repo
+    const repo = get().currentRepo;
+    if (repo) setPersistedSession(repo, id);
     request<DetailResponse>({ type: "agent/session/detail", sessionId: id })
-      .then(res => set({ turns: res.turns, activities: res.activities, lastCoord: res.lastCoord, contextUsage: res.contextUsage ?? null }))
+      .then(res => {
+        const { textActivities, hiddenCounts } = filterActivities(res.activities);
+        set({ turns: res.turns, activities: textActivities, hiddenCounts, lastCoord: res.lastCoord, contextUsage: res.contextUsage ?? null });
+      })
       .catch(console.error);
     request<AgentSubscribeMsg>({ type: "agent/subscribe", sessionId: id })
       .catch(console.error);
@@ -167,13 +205,20 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
 
   deleteSession: (id, request) => {
     request<{ ok: boolean }>({ type: "agent/session/delete", sessionId: id })
-      .then(() => set(s => {
-        const sessions = s.sessions.filter(sess => sess.id !== id);
-        const cleared = s.selectedSessionId === id
-          ? { selectedSessionId: null, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null }
-          : {};
-        return { sessions, ...cleared };
-      }))
+      .then(() => {
+        // Clear persisted session if deleting the currently persisted one
+        const repo = get().currentRepo;
+        if (repo && getPersistedSession(repo) === id) {
+          setPersistedSession(repo, null);
+        }
+        set(s => {
+          const sessions = s.sessions.filter(sess => sess.id !== id);
+          const cleared = s.selectedSessionId === id
+            ? { selectedSessionId: null, turns: [], activities: [], hiddenCounts: {}, live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null }
+            : {};
+          return { sessions, ...cleared };
+        });
+      })
       .catch(console.error);
   },
 
@@ -242,12 +287,16 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       detailMsg.afterActivityIdx = coord.activityIdx;
     }
     request<DetailResponse>(detailMsg)
-      .then(res => set(s => ({
-        turns: coord ? mergeTurns(s.turns, res.turns) : res.turns,
-        activities: coord ? [...s.activities, ...res.activities] : res.activities,
-        lastCoord: res.lastCoord ?? s.lastCoord,
-        contextUsage: res.contextUsage ?? s.contextUsage,
-      })))
+      .then(res => set(s => {
+        const { textActivities, hiddenCounts } = filterActivities(res.activities);
+        return {
+          turns: coord ? mergeTurns(s.turns, res.turns) : res.turns,
+          activities: coord ? [...s.activities, ...textActivities] : textActivities,
+          hiddenCounts: coord ? { ...s.hiddenCounts, ...hiddenCounts } : hiddenCounts,
+          lastCoord: res.lastCoord ?? s.lastCoord,
+          contextUsage: res.contextUsage ?? s.contextUsage,
+        };
+      }))
       .catch(console.error);
   },
 }));
@@ -261,4 +310,21 @@ function mergeTurns(existing: AgentTurn[], incoming: AgentTurn[]): AgentTurn[] {
   const map = new Map(existing.map(t => [t.id, t]));
   for (const t of incoming) map.set(t.id, t); // upsert
   return [...map.values()].sort((a, b) => a.idx - b.idx);
+}
+
+/** Filter activities: keep only text activities, compute hidden counts per turn. */
+function filterActivities(activities: AgentActivity[]): {
+  textActivities: AgentActivity[];
+  hiddenCounts: Record<string, number>;
+} {
+  const textActivities: AgentActivity[] = [];
+  const hiddenCounts: Record<string, number> = {};
+  for (const a of activities) {
+    if (a.type === "text") {
+      textActivities.push(a);
+    } else {
+      hiddenCounts[a.turn_id] = (hiddenCounts[a.turn_id] ?? 0) + 1;
+    }
+  }
+  return { textActivities, hiddenCounts };
 }
