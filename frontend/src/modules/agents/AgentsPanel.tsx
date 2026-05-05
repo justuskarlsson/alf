@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
@@ -255,11 +255,14 @@ const ChatFeed = React.memo(function ChatFeed({ turns, activities, live, pending
   pendingPrompt: string | null;
   selectedSessionId: string;
 }) {
-  const feed = buildFeed(turns, activities, live, pendingPrompt);
+  const feed = useMemo(
+    () => buildFeed(turns, activities, live, pendingPrompt),
+    [turns, activities, live, pendingPrompt]
+  );
   return (
     <div className="flex-1 overflow-auto flex flex-col-reverse" data-testid="chat-feed" data-alf-ctx-session={selectedSessionId}>
       <div className="flex flex-col-reverse gap-2 p-3">
-        {feed.map((item, i) => <FeedItem key={i} item={item} />)}
+        {feed.map(item => <FeedItem key={item.id} item={item} />)}
       </div>
     </div>
   );
@@ -525,8 +528,8 @@ function ChatComposer() {
 }
 
 type FeedItemData =
-  | { kind: "user"; prompt: string }
-  | { kind: "activity"; activityType: string; content: string; live?: boolean };
+  | { kind: "user"; prompt: string; id: string }
+  | { kind: "activity"; activityType: string; content: string; live?: boolean; id: string };
 
 const FeedItem = React.memo(function FeedItem({ item }: { item: FeedItemData }) {
   if (item.kind === "user") {
@@ -605,23 +608,30 @@ function buildFeed(
   const items: FeedItemData[] = [];
 
   if (live) {
-    items.push({ kind: "activity", activityType: live.activityType, content: live.content, live: true });
+    items.push({ kind: "activity", activityType: live.activityType, content: live.content, live: true, id: "live" });
   }
   if (pendingPrompt) {
-    items.push({ kind: "user", prompt: pendingPrompt });
+    items.push({ kind: "user", prompt: pendingPrompt, id: "pending" });
+  }
+
+  // Build activity index: turn_id -> activities (sorted by idx, reversed for display)
+  const activityMap = new Map<string, AgentActivity[]>();
+  for (const a of activities) {
+    let list = activityMap.get(a.turn_id);
+    if (!list) { list = []; activityMap.set(a.turn_id, list); }
+    list.push(a);
+  }
+  for (const list of activityMap.values()) {
+    list.sort((a, b) => b.idx - a.idx); // reversed for display
   }
 
   const turnsCopy = [...turns].reverse();
   for (const turn of turnsCopy) {
-    const turnActivities = activities
-      .filter(a => a.turn_id === turn.id)
-      .sort((a, b) => a.idx - b.idx)
-      .reverse();
-
+    const turnActivities = activityMap.get(turn.id) ?? [];
     for (const act of turnActivities) {
-      items.push({ kind: "activity", activityType: act.type, content: act.content });
+      items.push({ kind: "activity", activityType: act.type, content: act.content, id: act.id });
     }
-    items.push({ kind: "user", prompt: turn.prompt });
+    items.push({ kind: "user", prompt: turn.prompt, id: turn.id });
   }
 
   return items;

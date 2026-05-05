@@ -129,6 +129,31 @@ describe("dbTurns", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Turns — complete with usage
+// ---------------------------------------------------------------------------
+
+describe("dbTurns.complete with usage", () => {
+  it("persists token counts", () => {
+    const session = dbSessions.create(dbRepos.upsert("/test").id, "test");
+    const turn = dbTurns.create(session.id, "hello");
+    dbTurns.complete(turn.id, { inputTokens: 5000, outputTokens: 1000, contextWindow: 200000 });
+    const turns = dbTurns.list(session.id);
+    expect(turns[0].input_tokens).toBe(5000);
+    expect(turns[0].output_tokens).toBe(1000);
+    expect(turns[0].context_window).toBe(200000);
+  });
+
+  it("works without usage (backward compatible)", () => {
+    const session = dbSessions.create(dbRepos.upsert("/test2").id, "test");
+    const turn = dbTurns.create(session.id, "hello");
+    dbTurns.complete(turn.id);
+    const turns = dbTurns.list(session.id);
+    expect(turns[0].completed_at).toBeTruthy();
+    expect(turns[0].input_tokens).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Activities
 // ---------------------------------------------------------------------------
 

@@ -2,12 +2,12 @@
 id: T-040
 title: "File outline — collapsible symbol list below files"
 type: feature
-status: open
+status: done
 priority: low
 epic: files
 effort: M
 created: 2026-04-29
-updated: 2026-05-04
+updated: 2026-05-05
 ---
 
 Add a collapsible "Outline" section below FILES in the file panel, showing symbols (functions, classes, variables) defined in the currently selected file. **Scope: single file only** (not project-wide).

@@ -5,6 +5,7 @@ import path from "path";
 import type { FileEntry } from "@alf/types";
 import { handle, type Reply } from "../../core/dispatch.js";
 import { ALF_DIR, REPOS_ROOT } from "../../core/config.js";
+import { extractOutline } from "./outline.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -48,6 +49,27 @@ export class FilesModule {
         console.error("[files/get] Cannot read file:", fullPath, "repo:", repo, "path:", filePath);
         reply({ type: "error", error: "Cannot read file" });
       }
+    }
+  }
+
+  @handle("files/outline")
+  static async outline(msg: Record<string, unknown>, reply: Reply) {
+    const repo = msg.repo as string | undefined;
+    const filePath = msg.path as string | undefined;
+    if (!repo || !filePath) { reply({ type: "error", error: "Missing repo or path" }); return; }
+
+    const repoRoot = path.join(REPOS_ROOT, repo);
+    const fullPath = path.resolve(repoRoot, filePath);
+    if (!fullPath.startsWith(repoRoot + path.sep) && fullPath !== repoRoot) {
+      reply({ type: "error", error: "Invalid path" }); return;
+    }
+
+    try {
+      const content = await fs.promises.readFile(fullPath, "utf8");
+      const symbols = extractOutline(content, filePath);
+      reply({ type: "files/outline", path: filePath, symbols });
+    } catch {
+      reply({ type: "files/outline", path: filePath, symbols: [] });
     }
   }
 }

@@ -127,7 +127,10 @@ async function runTurnInner(
         currentType = null;
 
       } else if (event.event === "turn_done") {
-        dbTurns.complete(turn.id);
+        const usage = event.usage
+          ? { inputTokens: event.usage.contextTokens, outputTokens: 0, contextWindow: event.usage.maxContextTokens }
+          : undefined;
+        dbTurns.complete(turn.id, usage);
         dbSessions.touch(sessionId);
         if (event.usage) turnUsage = event.usage;
       }

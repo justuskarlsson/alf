@@ -65,6 +65,9 @@ export interface AgentTurn {
   idx: number;
   created_at: number;
   completed_at: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  context_window: number | null;
 }
 
 export interface AgentActivity {

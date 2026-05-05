@@ -10,6 +10,8 @@ import { useGlobalStore } from "../core/globalStore";
 import { useDashboardStore, PANEL_TYPES, type PanelInstance, type PanelType, type LayoutPreset } from "../core/dashboardStore";
 import { useAnnotationStore } from "../core/annotationStore";
 import { AnnotationLayer } from "../core/AnnotationLayer";
+import { useIsMobile } from "../core/useIsMobile";
+import { MobileSwipeView } from "./MobileSwipeView";
 import { FilesPanel } from "../modules/files/FilesPanel";
 import { TicketsPanel } from "../modules/tickets/TicketsPanel";
 import { GitPanel } from "../modules/git/GitPanel";
@@ -177,6 +179,7 @@ function AnnotationModeToggle() {
 export function RepoPage({ repo }: Props) {
   const navigate = useNavigate();
   const { request } = useRelay();
+  const isMobile = useIsMobile();
 
   // Guard: skip onLayoutChange callbacks until initForRepo has loaded the saved layout.
   // RGL fires onLayoutChange on every render (including the initial one with INITIAL_LAYOUT).
@@ -272,77 +275,89 @@ export function RepoPage({ repo }: Props) {
 
         <AnnotationModeToggle />
 
-        <div className="ml-auto flex items-center gap-2">
-          <PresetSelector
-            activePreset={activePreset}
-            userPresets={userPresets}
-            onLoad={loadPreset}
-            onSave={savePreset}
-            onDelete={deletePreset}
-          />
-          {freeMode && (
-            <select
-              value=""
-              onChange={e => { if (e.target.value) addPanel(e.target.value as PanelType); }}
-              className="bg-alf-bg border border-alf-border rounded px-2 py-0.5 text-xs font-mono
-                         text-slate-400 cursor-pointer hover:border-slate-500 focus:outline-none
-                         focus:border-slate-400 transition-colors"
+        {!isMobile && (
+          <div className="ml-auto flex items-center gap-2">
+            <PresetSelector
+              activePreset={activePreset}
+              userPresets={userPresets}
+              onLoad={loadPreset}
+              onSave={savePreset}
+              onDelete={deletePreset}
+            />
+            {freeMode && (
+              <select
+                value=""
+                onChange={e => { if (e.target.value) addPanel(e.target.value as PanelType); }}
+                className="bg-alf-bg border border-alf-border rounded px-2 py-0.5 text-xs font-mono
+                           text-slate-400 cursor-pointer hover:border-slate-500 focus:outline-none
+                           focus:border-slate-400 transition-colors"
+              >
+                <option value="" disabled>+ Add panel</option>
+                {Object.entries(PANEL_TYPES).map(([type, { label }]) => (
+                  <option key={type} value={type} style={{ background: "#161b22" }}>{label}</option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={toggleFreeMode}
+              title={freeMode ? "Lock layout" : "Unlock layout"}
+              className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors px-2 py-0.5
+                         border border-alf-border rounded hover:border-slate-500 select-none"
             >
-              <option value="" disabled>+ Add panel</option>
-              {Object.entries(PANEL_TYPES).map(([type, { label }]) => (
-                <option key={type} value={type} style={{ background: "#161b22" }}>{label}</option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={toggleFreeMode}
-            title={freeMode ? "Lock layout" : "Unlock layout"}
-            className="font-mono text-xs text-slate-600 hover:text-slate-300 transition-colors px-2 py-0.5
-                       border border-alf-border rounded hover:border-slate-500 select-none"
-          >
-            {freeMode ? "🔓 unlock" : "🔒 lock"}
-          </button>
-        </div>
+              {freeMode ? "🔓 unlock" : "🔒 lock"}
+            </button>
+          </div>
+        )}
       </header>
 
       <AnnotationLayer />
 
       {/* Dashboard */}
-      <div ref={containerRef} className="flex-1 min-h-0 p-2 bg-alf-bg">
-        <GridLayout
-          layout={layout}
-          onLayoutChange={newLayout => { if (layoutReady.current) setLayout(newLayout); }}
-          width={dims.w}
-          autoSize={false}
-          gridConfig={{
-            cols: 12,
-            rowHeight,
-            margin: [MARGIN, MARGIN] as [number, number],
-            containerPadding: [0, 0] as [number, number],
-            maxRows: Infinity,
-          }}
-          dragConfig={{
-            enabled: freeMode,
-            handle: ".panel-drag-handle",
-            bounded: false,
-            threshold: 3,
-          }}
-          resizeConfig={{ enabled: freeMode }}
-          style={{ height: dims.h }}
-        >
-          {panels.map(panel => (
-            <div key={panel.id} data-testid={`panel-${panel.type}`}>
-              <PanelCard
-                label={panel.title ?? PANEL_TYPES[panel.type].label}
-                drag={freeMode}
-                onRemove={freeMode ? () => removePanel(panel.id) : undefined}
-              >
-                {renderPanelContent(panel, repo)}
-              </PanelCard>
-            </div>
-          ))}
-        </GridLayout>
-      </div>
+      {isMobile ? (
+        <div className="flex-1 min-h-0">
+          <MobileSwipeView
+            panels={panels}
+            repo={repo}
+            renderPanel={renderPanelContent}
+          />
+        </div>
+      ) : (
+        <div ref={containerRef} className="flex-1 min-h-0 p-2 bg-alf-bg">
+          <GridLayout
+            layout={layout}
+            onLayoutChange={newLayout => { if (layoutReady.current) setLayout(newLayout); }}
+            width={dims.w}
+            autoSize={false}
+            gridConfig={{
+              cols: 12,
+              rowHeight,
+              margin: [MARGIN, MARGIN] as [number, number],
+              containerPadding: [0, 0] as [number, number],
+              maxRows: Infinity,
+            }}
+            dragConfig={{
+              enabled: freeMode,
+              handle: ".panel-drag-handle",
+              bounded: false,
+              threshold: 3,
+            }}
+            resizeConfig={{ enabled: freeMode }}
+            style={{ height: dims.h }}
+          >
+            {panels.map(panel => (
+              <div key={panel.id} data-testid={`panel-${panel.type}`}>
+                <PanelCard
+                  label={panel.title ?? PANEL_TYPES[panel.type].label}
+                  drag={freeMode}
+                  onRemove={freeMode ? () => removePanel(panel.id) : undefined}
+                >
+                  {renderPanelContent(panel, repo)}
+                </PanelCard>
+              </div>
+            ))}
+          </GridLayout>
+        </div>
+      )}
     </div>
   );
 }

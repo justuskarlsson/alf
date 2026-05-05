@@ -2,13 +2,13 @@
 id: T-044
 title: "Frontend memory bloat & lag on large agent sessions (~6 GB RAM)"
 type: bug
-status: open
+status: done
 priority: high
 epic: agents
 effort: M
 related: T-042
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-05
 ---
 
 When an agent conversation/session grows large, the frontend's RAM usage balloons to ~6 GB and streaming updates feel sluggish. Primarily a frontend issue, though backend contribution hasn't been fully ruled out.

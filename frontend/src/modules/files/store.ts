@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { FileEntry } from "@alf/types";
+import type { FileEntry, OutlineSymbol } from "@alf/types";
 import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 import { storage } from "../../core/storage";
 
@@ -24,6 +24,9 @@ interface FilesStore {
   star: (repo: string, path: string) => void;
   unstar: (repo: string, path: string) => void;
   listFiles: (repo: string, request: WsRequest) => void;
+  outlineSymbols: OutlineSymbol[];
+  outlineLoading: boolean;
+  loadOutline: (repo: string, path: string, request: WsRequest) => void;
 }
 
 export const useFilesStore = create<FilesStore>((set) => ({
@@ -61,11 +64,22 @@ export const useFilesStore = create<FilesStore>((set) => ({
   }),
   listFiles: (repo, request) => {
     const showHidden = useFilesStore.getState().showHidden;
-    set({ filesLoading: true, selectedFile: null, fileContent: null, isBinary: false });
+    set({ filesLoading: true, selectedFile: null, fileContent: null, isBinary: false, outlineSymbols: [] });
     request<{ files: FileEntry[] }>({ type: "files/list", repo, showHidden })
       .then(res => set({ files: res.files, filesLoading: false }))
       .catch((err) => {
         set({ filesLoading: false });
+        if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
+      });
+  },
+  outlineSymbols: [],
+  outlineLoading: false,
+  loadOutline: (repo, path, request) => {
+    set({ outlineLoading: true });
+    request<{ symbols: OutlineSymbol[] }>({ type: "files/outline", repo, path })
+      .then(res => set({ outlineSymbols: res.symbols, outlineLoading: false }))
+      .catch((err) => {
+        set({ outlineSymbols: [], outlineLoading: false });
         if (!(err instanceof ScopedRequestCancelledError)) console.error(err);
       });
   },

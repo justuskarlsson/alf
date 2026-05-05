@@ -190,10 +190,11 @@ function FileNode({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
 function useOpenFile() {
   const { request } = useRelay();
   const repo = useRepo();
-  const { setSelectedFile, setFileContent, setIsBinary } = useFilesStore(useShallow(s => ({
+  const { setSelectedFile, setFileContent, setIsBinary, loadOutline } = useFilesStore(useShallow(s => ({
     setSelectedFile: s.setSelectedFile,
     setFileContent: s.setFileContent,
     setIsBinary: s.setIsBinary,
+    loadOutline: s.loadOutline,
   })));
 
   return (filePath: string) => {
@@ -207,6 +208,7 @@ function useOpenFile() {
         setIsBinary(res.isBinary === true);
       })
       .catch(console.error);
+    loadOutline(repo, filePath, request);
   };
 }
 

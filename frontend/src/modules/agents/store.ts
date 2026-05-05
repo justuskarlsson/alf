@@ -12,6 +12,7 @@ interface DetailResponse {
   turns: AgentTurn[];
   activities: AgentActivity[];
   lastCoord: AgentLastCoord | null;
+  contextUsage?: { contextTokens: number; maxContextTokens: number } | null;
 }
 
 /** Activity being built live from stream deltas — not yet persisted. */
@@ -21,11 +22,12 @@ export interface LiveState {
   idx: number;
 }
 
-export const AVAILABLE_IMPLS = ["claude-code", "test"] as const;
+export const AVAILABLE_IMPLS = ["claude-code", "codex", "test"] as const;
 
 /** Models available per impl. Impls not listed here have no model selector. */
 export const MODEL_OPTIONS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7"],
+  "codex": ["codex-high", "codex-max", "codex-medium", "codex-low"],
 };
 
 interface AgentsStore {
@@ -41,6 +43,7 @@ interface AgentsStore {
   selectedModel: string; // active model (only used by impls in MODEL_OPTIONS)
   lastSeenMap: Record<string, number>; // sessionId → last-viewed timestamp (for unread indicator)
   contextUsage: ContextUsage | null; // latest context window usage for selected session
+  lastCoord: AgentLastCoord | null; // incremental fetch cursor
 
   loadSessions: (repo: string, request: WsRequest) => void;
   selectSession: (id: string, request: WsRequest) => void;
@@ -68,6 +71,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   selectedImpl: "claude-code",
   selectedModel: "claude-opus-4-6",
   contextUsage: null,
+  lastCoord: null,
   lastSeenMap: JSON.parse(localStorage.getItem("alf-agent-last-seen") || "{}"),
 
   loadSessions: (repo, request) => {
@@ -86,6 +90,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       isRunning: false,
       pendingPrompt: null,
       contextUsage: null,
+      lastCoord: null,
     });
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
       .then(res => set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) }))
@@ -101,9 +106,9 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     }
     const map = { ...get().lastSeenMap, [id]: Date.now() };
     localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
-    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
+    set(s => ({ selectedSessionId: id, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
     request<DetailResponse>({ type: "agent/session/detail", sessionId: id })
-      .then(res => set({ turns: res.turns, activities: res.activities }))
+      .then(res => set({ turns: res.turns, activities: res.activities, lastCoord: res.lastCoord, contextUsage: res.contextUsage ?? null }))
       .catch(console.error);
     request<AgentSubscribeMsg>({ type: "agent/subscribe", sessionId: id })
       .catch(console.error);
@@ -165,7 +170,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       .then(() => set(s => {
         const sessions = s.sessions.filter(sess => sess.id !== id);
         const cleared = s.selectedSessionId === id
-          ? { selectedSessionId: null, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null }
+          ? { selectedSessionId: null, turns: [], activities: [], live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null }
           : {};
         return { sessions, ...cleared };
       }))
@@ -222,6 +227,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     const now = Date.now();
     const map = { ...get().lastSeenMap, [sessionId]: now };
     localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
+    const coord = get().lastCoord;
     set(s => ({
       live: null, isRunning: false, pendingPrompt: null, lastSeenMap: map,
       contextUsage: usage ?? s.contextUsage,
@@ -229,9 +235,30 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         .map(sess => sess.id === sessionId ? { ...sess, updated_at: now } : sess)
         .sort((a, b) => b.updated_at - a.updated_at),
     }));
-    // Reload persisted state from DB
-    request<DetailResponse>({ type: "agent/session/detail", sessionId })
-      .then(res => set({ turns: res.turns, activities: res.activities }))
+    // Incremental fetch — only new turns/activities since last known coord
+    const detailMsg: Record<string, unknown> = { type: "agent/session/detail", sessionId };
+    if (coord) {
+      detailMsg.afterTurnIdx = coord.turnIdx;
+      detailMsg.afterActivityIdx = coord.activityIdx;
+    }
+    request<DetailResponse>(detailMsg)
+      .then(res => set(s => ({
+        turns: coord ? mergeTurns(s.turns, res.turns) : res.turns,
+        activities: coord ? [...s.activities, ...res.activities] : res.activities,
+        lastCoord: res.lastCoord ?? s.lastCoord,
+        contextUsage: res.contextUsage ?? s.contextUsage,
+      })))
       .catch(console.error);
   },
 }));
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Merge incoming turns into existing (upsert by id — a turn may appear in both if just completed). */
+function mergeTurns(existing: AgentTurn[], incoming: AgentTurn[]): AgentTurn[] {
+  const map = new Map(existing.map(t => [t.id, t]));
+  for (const t of incoming) map.set(t.id, t); // upsert
+  return [...map.values()].sort((a, b) => a.idx - b.idx);
+}

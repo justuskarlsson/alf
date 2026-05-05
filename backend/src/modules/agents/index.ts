@@ -12,6 +12,7 @@ import { initSession, runTurn, type StreamSink } from "../../core/agents/index.j
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
 import { testImpl } from "./implementations/test.js";
 import { claudeCodeImpl } from "./implementations/claude-code.js";
+import { codexImpl } from "./implementations/codex.js";
 import { createLogger } from "../../core/logger.js";
 import type { ImplFn } from "../../core/agents/types.js";
 
@@ -26,6 +27,7 @@ const runningTurns = new Map<string, AbortController>();
 const IMPLS: Record<string, ImplFn> = {
   test: testImpl,
   "claude-code": claudeCodeImpl,
+  codex: codexImpl,
 };
 
 const DEFAULT_IMPL = process.env.DEFAULT_IMPL ?? "test";
@@ -74,10 +76,27 @@ export class AgentsModule {
     const sid = sessionId ?? (repo ? initSession(repo, impl) : null);
     if (!sid) { reply({ type: "agent/message", error: "repo or sessionId required" }); return; }
 
+    // Detect impl switch (e.g. claude-code → codex). Clear SDK session so adapter
+    // starts a fresh thread, and prepend conversation history from our DB.
+    const session = dbSessions.get(sid);
+    if (session && impl && session.impl !== impl) {
+      log.info("Impl switch detected", { from: session.impl, to: impl, sessionId: sid });
+      dbSessions.setSdkSessionId(sid, null);  // clear stale SDK session
+      dbSessions.update(sid, { impl });     // update session to new impl
+    }
+
     // Save uploaded files to .alf/uploads/{sessionId}/ and build prompt suffix
     let fullPrompt = prompt;
+
+    // If switching impl, prepend conversation history so the new agent has context
+    if (session && impl && session.impl !== impl) {
+      const history = buildConversationHistory(sid);
+      if (history) {
+        fullPrompt = history + "\n\n---\n\n" + prompt;
+      }
+    }
+
     if (files?.length) {
-      const session = dbSessions.get(sid);
       const repoRow = session ? dbRepos.get(session.repo_id) : null;
       if (repoRow) {
         const savedPaths = saveUploadedFiles(repoRow.path, sid, files);
@@ -199,7 +218,18 @@ export class AgentsModule {
       ? dbActivities.listSince(sessionId, afterTurnIdx, afterActivityIdx)
       : dbActivities.listForSession(sessionId);
     const lastCoord = dbActivities.lastCoord(sessionId);
-    reply({ type: "agent/session/detail", session, turns, activities, lastCoord });
+
+    // Derive context usage from the latest completed turn with usage data
+    let contextUsage: { contextTokens: number; maxContextTokens: number } | null = null;
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const t = turns[i];
+      if (t.input_tokens !== null && t.context_window !== null) {
+        contextUsage = { contextTokens: t.input_tokens, maxContextTokens: t.context_window };
+        break;
+      }
+    }
+
+    reply({ type: "agent/session/detail", session, turns, activities, lastCoord, contextUsage });
   }
 }
 
@@ -261,4 +291,42 @@ function uniqueName(dir: string, name: string): string {
   let i = 1;
   while (existsSync(join(dir, `${stem}-${i}${ext}`))) i++;
   return `${stem}-${i}${ext}`;
+}
+
+/**
+ * Build a text summary of the session's conversation history from DB.
+ * Used when switching impls so the new agent gets prior context.
+ * Returns null if there's no history worth including.
+ */
+function buildConversationHistory(sessionId: string): string | null {
+  const turns = dbTurns.list(sessionId);
+  if (turns.length === 0) return null;
+
+  const activities = dbActivities.listForSession(sessionId);
+  // Group activities by turn_id for O(1) lookup
+  const actsByTurn = new Map<string, typeof activities>();
+  for (const a of activities) {
+    let arr = actsByTurn.get(a.turn_id);
+    if (!arr) { arr = []; actsByTurn.set(a.turn_id, arr); }
+    arr.push(a);
+  }
+
+  const parts: string[] = [
+    "The following is a conversation history from a previous agent session. Continue from where it left off.\n",
+  ];
+
+  for (const turn of turns) {
+    parts.push(`[User]: ${turn.prompt}`);
+    const turnActs = actsByTurn.get(turn.id) ?? [];
+    for (const act of turnActs) {
+      if (act.type === "text") {
+        parts.push(`[Assistant]: ${act.content}`);
+      } else if (act.type === "tool") {
+        parts.push(`[Tool]: ${act.content}`);
+      }
+      // Skip thinking — internal, not useful as context
+    }
+  }
+
+  return parts.join("\n\n");
 }

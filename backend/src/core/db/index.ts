@@ -59,6 +59,9 @@ export interface Turn {
   idx: number;
   created_at: number;
   completed_at: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  context_window: number | null;
 }
 
 export interface Activity {
@@ -146,8 +149,8 @@ export const dbSessions = {
     for (const oldTurn of turnsToCopy) {
       const newTurnId = crypto.randomUUID();
       db.prepare(
-        "INSERT INTO turns (id, session_id, prompt, idx, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?)"
-      ).run(newTurnId, newId, oldTurn.prompt, oldTurn.idx, oldTurn.created_at, oldTurn.completed_at);
+        "INSERT INTO turns (id, session_id, prompt, idx, created_at, completed_at, input_tokens, output_tokens, context_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(newTurnId, newId, oldTurn.prompt, oldTurn.idx, oldTurn.created_at, oldTurn.completed_at, oldTurn.input_tokens, oldTurn.output_tokens, oldTurn.context_window);
 
       // Copy activities for this turn
       const activities = db.prepare(
@@ -173,7 +176,7 @@ export const dbSessions = {
       .all(repoId) as Session[];
   },
 
-  setSdkSessionId(id: string, sdkSessionId: string): void {
+  setSdkSessionId(id: string, sdkSessionId: string | null): void {
     getDb().prepare("UPDATE sessions SET sdk_session_id = ?, updated_at = ? WHERE id = ?").run(sdkSessionId, Date.now(), id);
   },
 
@@ -229,8 +232,14 @@ export const dbTurns = {
       .all(sessionId) as Turn[];
   },
 
-  complete(id: string): void {
-    getDb().prepare("UPDATE turns SET completed_at = ? WHERE id = ?").run(Date.now(), id);
+  complete(id: string, usage?: { inputTokens: number; outputTokens: number; contextWindow: number }): void {
+    if (usage) {
+      getDb().prepare(
+        "UPDATE turns SET completed_at = ?, input_tokens = ?, output_tokens = ?, context_window = ? WHERE id = ?"
+      ).run(Date.now(), usage.inputTokens, usage.outputTokens, usage.contextWindow, id);
+    } else {
+      getDb().prepare("UPDATE turns SET completed_at = ? WHERE id = ?").run(Date.now(), id);
+    }
   },
 };
 
@@ -304,7 +313,7 @@ function runMigrations(db: Database.Database): void {
   const applied = new Set(
     (db.prepare("SELECT name FROM _migrations").all() as { name: string }[]).map(r => r.name)
   );
-  const files = ["001_initial.sql", "002_fork.sql"];
+  const files = ["001_initial.sql", "002_fork.sql", "003_context_usage.sql"];
   for (const file of files) {
     if (applied.has(file)) continue;
     db.exec(readFileSync(join(__dir, "migrations", file), "utf-8"));

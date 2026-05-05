@@ -2,7 +2,7 @@
 id: T-045
 title: Mobile layout — single-panel swipeable view
 type: feature
-status: open
+status: done
 priority: medium
 epic: frontend
 effort: M

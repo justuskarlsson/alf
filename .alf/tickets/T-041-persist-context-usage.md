@@ -2,12 +2,12 @@
 id: T-041
 title: Persist per-turn token usage for context window tracking
 type: feature
-status: open
+status: done
 priority: medium
 epic: agents
 effort: M
 created: 2026-04-29
-updated: 2026-04-29
+updated: 2026-05-05
 ---
 
 Persist token usage data per turn so context window usage survives page refresh and can be reconstructed from history.

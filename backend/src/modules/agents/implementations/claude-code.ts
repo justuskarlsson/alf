@@ -179,8 +179,10 @@ export const claudeCodeImpl: ImplFn = async (prompt, ctx, emit, signal) => {
     }
   }
 
+  // Only input_tokens reflects context fill. Output tokens are generated, not in the window.
+  // Note: for multi-tool turns, inputTokens is cumulative across API calls (overestimates).
   const usage: ContextUsage | undefined = (lastInputTokens && contextWindow)
-    ? { contextTokens: lastInputTokens + lastOutputTokens, maxContextTokens: contextWindow }
+    ? { contextTokens: lastInputTokens, maxContextTokens: contextWindow }
     : undefined;
 
   log.info("Turn usage", { lastInputTokens, lastOutputTokens, contextWindow, usage });

@@ -2,12 +2,12 @@
 id: T-029
 title: Codex agent SDK implementation
 type: research
-status: open
+status: done
 priority: medium
 epic: agents
 effort: L
 created: 2026-04-24
-updated: 2026-05-04
+updated: 2026-05-05
 ---
 
 > **⚠️ Agent instruction:** Before implementing, do web research on the current state of the Codex SDK (`@openai/codex-sdk`). The research notes below were written in April 2026 and the SDK is evolving rapidly — verify the API surface, event model, and installation requirements are still accurate before writing any code.
