@@ -2,13 +2,15 @@
 id: T-029
 title: Codex agent SDK implementation
 type: research
-status: future
+status: open
 priority: medium
 epic: agents
 effort: L
 created: 2026-04-24
-updated: 2026-04-24
+updated: 2026-05-04
 ---
+
+> **⚠️ Agent instruction:** Before implementing, do web research on the current state of the Codex SDK (`@openai/codex-sdk`). The research notes below were written in April 2026 and the SDK is evolving rapidly — verify the API surface, event model, and installation requirements are still accurate before writing any code.
 
 Research and implement a Codex agent SDK adapter alongside the existing Claude Code SDK implementation.
 
@@ -74,10 +76,11 @@ The `ImplFn` interface (`prompt, ctx, emit, signal`) stays the same. The adapter
 
 ## Implementation scope
 
-- New file: `modules/agents/implementations/codex.ts`
-- Lightweight adapter — most logic stays in `core/agents`
-- Model selector (T-017) should allow picking Codex as the provider
-- `npm install @openai/codex-sdk` (requires `@openai/codex` CLI installed)
+- New file: `backend/src/modules/agents/implementations/codex.ts`
+- Lightweight adapter — most logic stays in `core/agents` (the `ImplFn` interface, `runTurn`, DB writes are all impl-agnostic)
+- Model selector (T-017) is done — just add `"codex"` to `AVAILABLE_IMPLS` and `MODEL_OPTIONS` in `frontend/src/modules/agents/store.ts`
+- Register `codexImpl` in `IMPLS` record in `backend/src/modules/agents/index.ts`
+- `pnpm add @openai/codex-sdk` in `backend/` (requires `@openai/codex` CLI installed on host)
 
 ## Acceptance
 
@@ -86,6 +89,29 @@ The `ImplFn` interface (`prompt, ctx, emit, signal`) stays the same. The adapter
 - [ ] Session persistence works (thread ID stored as sdkSessionId)
 - [ ] Session continuity via `resumeThread()`
 - [ ] Can switch between Claude and Codex via model selector
+
+## Files to change
+
+### New files
+- `backend/src/modules/agents/implementations/codex.ts` — The Codex SDK adapter. Must export a `codexImpl` conforming to `ImplFn` (same signature as `claudeCodeImpl` and `testImpl`: `(prompt, ctx, emit, signal) => Promise<{ sdkSessionId?: string }>`). Maps Codex `item.started/delta/completed` events to `activity_start/delta/end` emissions, and `turn.completed` to `turn_done`. Captures `thread.id` as `sdkSessionId` for session continuity via `resumeThread()`.
+
+### Modified files
+- `backend/package.json` — Add `@openai/codex-sdk` dependency.
+- `backend/src/modules/agents/index.ts` — Import `codexImpl` from `./implementations/codex.js` and register it in the `IMPLS` record as `"codex"`.
+- `frontend/src/modules/agents/store.ts` — Add `"codex"` to `AVAILABLE_IMPLS` array. Add a `"codex"` entry to `MODEL_OPTIONS` with available OpenAI models (e.g. `["gpt-4.1", "o3", "o4-mini"]`).
+- `backend/src/core/agents/agents.test.ts` — Add a `describe.skipIf(!LIVE)("live smoke — codexImpl")` block mirroring the existing `claudeCodeImpl` live smoke test.
+
+### No changes needed
+- `backend/src/core/agents/types.ts` — `ImplFn`, `ActivityEvent`, `ImplContext`, `ActivityType` are all generic enough. No changes required.
+- `backend/src/core/agents/index.ts` — Core turn execution (`runTurn`, `initSession`) is impl-agnostic. No changes needed.
+- `shared/types/index.ts` — `impl` is already `string` typed, no enum restriction. No changes needed.
+- `frontend/src/modules/agents/AgentsPanel.tsx` — Already renders `AVAILABLE_IMPLS` and `MODEL_OPTIONS` dynamically from the store. No changes needed.
+
+## Dependencies
+
+- **T-017 (Agent impl & model selector)** — Status: **done**. The frontend impl/model selector is already implemented and wired. Adding `"codex"` to `AVAILABLE_IMPLS` and `MODEL_OPTIONS` in the store is all that's needed on the frontend side.
+- **No blocking dependencies.** The `ImplFn` interface, core agent layer, DB schema, frontend selectors, and subscription/streaming pipeline are all in place and impl-agnostic.
+- **External dependency:** Requires `@openai/codex` CLI installed on the host (the SDK spawns it). Also requires `OPENAI_API_KEY` env var set for the backend process (similar to how Claude Code needs `ANTHROPIC_API_KEY`).
 
 ## Notes
 
