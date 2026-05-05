@@ -48,6 +48,10 @@ html, body, #root {
   opacity: 0.3;
 }
 
+.alf-collapsible-section:not(:has(~ .alf-collapsible-section[data-open="true"])) > [role="separator"] {
+  display: none;
+}
+
 /* react-diff-view: dark theme via CSS custom properties */
 .alf-diff .diff {
   --diff-background-color: #0d1117;
@@ -77,8 +81,9 @@ html, body, #root {
   font-size: 0.8125rem;
   line-height: 1.6;
   font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
+  overflow-wrap: normal;
+  min-width: max-content;
 }
 .alf-shiki code {
   background: transparent !important;
@@ -87,6 +92,9 @@ html, body, #root {
 /* Line numbers via CSS counters */
 .alf-shiki pre code {
   counter-reset: line;
+}
+.alf-shiki pre code .line {
+  display: block;
 }
 .alf-shiki pre code .line::before {
   counter-increment: line;

@@ -78,7 +78,7 @@ function FilesSidebar({ repo }: { repo: string }) {
       <StarredSection />
       <OutlineSection />
       <CollapsibleSection title="Files" fill>
-        <div ref={containerRef} className="h-full">
+        <div ref={containerRef} className="h-full min-h-0">
           <Tree
             data={buildTree(files)}
             openByDefault={false}
@@ -126,7 +126,7 @@ function StarredSection() {
 
   return (
     <CollapsibleSection title="Starred">
-      <div ref={containerRef} className="overflow-auto max-h-64">
+      <div ref={containerRef} className="h-full min-h-0 overflow-auto">
         <Tree
           data={treeData}
           openByDefault={true}
@@ -261,8 +261,8 @@ function OutlineSection() {
       {empty ? (
         <div className="px-2 py-2 text-xs text-slate-600 font-mono">{empty}</div>
       ) : (
-        <>
-          <div className="px-2 py-1 flex gap-1 flex-wrap text-[10px] font-mono">
+        <div className="h-full min-h-0 flex flex-col">
+          <div className="px-2 py-1 flex gap-1 flex-wrap text-[10px] font-mono shrink-0">
             <FilterBtn label="fn" active={showFunctions} onClick={() => setShowFunctions(v => !v)} />
             <FilterBtn label="class" active={showClasses} onClick={() => setShowClasses(v => !v)} />
             <FilterBtn label="method" active={showMethods} onClick={() => setShowMethods(v => !v)} />
@@ -272,7 +272,7 @@ function OutlineSection() {
             <span className="mx-1 text-slate-700">|</span>
             <FilterBtn label={sortBySize ? "size" : "line"} active={sortBySize} onClick={() => setSortBySize(v => !v)} />
           </div>
-          <div className="overflow-auto max-h-48">
+          <div className="flex-1 min-h-0 overflow-auto">
             {filtered.map((sym, i) => (
               <button
                 key={`${sym.name}-${sym.line}-${i}`}
@@ -289,7 +289,7 @@ function OutlineSection() {
               </button>
             ))}
           </div>
-        </>
+        </div>
       )}
     </CollapsibleSection>
   );

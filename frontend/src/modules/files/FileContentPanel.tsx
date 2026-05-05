@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { codeToHtml } from "shiki";
 import { Panel, EmptyState } from "../../panels/Panel";
@@ -32,6 +33,9 @@ export function FileContentPanel() {
   const [html, setHtml] = useState<string>("");
 
   const isImage = selectedFile ? isImageFile(selectedFile) : false;
+  const lineCount = fileContent ? fileContent.split(/\r\n|\r|\n/).length : 1;
+  const lineNumWidth = `${Math.max(3, String(lineCount).length) + 1}ch`;
+  const codeStyle = { "--line-num-w": lineNumWidth } as CSSProperties;
 
   useEffect(() => {
     if (!fileContent || !selectedFile || isImage) return;
@@ -70,11 +74,10 @@ export function FileContentPanel() {
       </div>
       <div className="flex-1 overflow-auto" data-alf-ctx-file={selectedFile}>
         {html
-          ? <div className="alf-shiki" dangerouslySetInnerHTML={{ __html: html }} />
-          : <pre className="p-4 font-mono text-sm text-slate-300 whitespace-pre-wrap">{fileContent}</pre>
+          ? <div className="alf-shiki" style={codeStyle} dangerouslySetInnerHTML={{ __html: html }} />
+          : <pre className="p-4 font-mono text-sm text-slate-300 whitespace-pre">{fileContent}</pre>
         }
       </div>
     </Panel>
   );
 }
-

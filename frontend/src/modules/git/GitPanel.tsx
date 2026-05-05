@@ -138,9 +138,8 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
 
   return (
     <Panel>
-      <div className="flex-1 overflow-auto">
       <CollapsibleSection title="Diffs">
-        <div className="max-h-[40vh] overflow-auto">
+        <div className="h-full min-h-0 overflow-auto">
           <div
             data-testid="git-all-changes"
             className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
@@ -176,7 +175,7 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
       </CollapsibleSection>
 
       <CollapsibleSection title="Commits">
-        <div className="max-h-[40vh] overflow-auto">
+        <div className="h-full min-h-0 overflow-auto">
           {/* Unstaged row — always at top */}
           <div
             className={`px-3 py-1.5 cursor-pointer select-none font-mono text-xs transition-colors
@@ -213,7 +212,7 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
       <CollapsibleSection title="Worktrees">
         {worktrees.length === 0
           ? <p className="px-3 py-2 text-slate-600 text-xs font-mono">No worktrees</p>
-          : <div className="divide-y divide-alf-muted">
+          : <div className="h-full min-h-0 overflow-auto divide-y divide-alf-muted">
               {worktrees.map((wt: Worktree) => {
                 const name = wt.path.split("/").pop() ?? wt.path;
                 const isActive = selectedWorktree?.path === wt.path;
@@ -236,7 +235,6 @@ function GitSidebar({ activeRepo }: { activeRepo: string }) {
             </div>
         }
       </CollapsibleSection>
-      </div>
     </Panel>
   );
 }

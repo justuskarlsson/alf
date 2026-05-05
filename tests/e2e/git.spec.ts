@@ -36,10 +36,9 @@ test.describe("Git panel", () => {
   test("diff sidebar sections are scrollable when overflowing", async ({ page }) => {
     await goToRepo(page);
     const panel = page.locator('[data-testid="panel-git"]');
-    // The sidebar scrollable wrapper (parent of CollapsibleSections) should allow scroll
     const diffsBtn = panel.getByRole("button", { name: /diffs/i });
-    // Walk up: button -> CollapsibleSection wrapper -> scrollable container
-    const scrollContainer = diffsBtn.locator("../..");
+    // Scrolling lives in the section body, not on the full sidebar wrapper.
+    const scrollContainer = diffsBtn.locator("xpath=following-sibling::div[1]/*[1]");
     const overflowY = await scrollContainer.evaluate((el) => {
       const style = window.getComputedStyle(el);
       return style.overflowY;
