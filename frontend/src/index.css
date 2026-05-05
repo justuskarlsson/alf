@@ -93,9 +93,6 @@ html, body, #root {
 .alf-shiki pre code {
   counter-reset: line;
 }
-.alf-shiki pre code .line {
-  display: block;
-}
 .alf-shiki pre code .line::before {
   counter-increment: line;
   content: counter(line);
