@@ -73,6 +73,8 @@ html, body, #root {
 .alf-diff .diff-gutter { background-color: #0d1117; color: #3d444d; border-right: 1px solid #21262d; }
 .alf-diff .diff-decoration { background: #161b22 !important; color: #388bfd; font-size: 0.7rem; }
 .alf-diff .diff-decoration-content { padding: 2px 8px; }
+.alf-diff .diff table { table-layout: fixed; width: 100%; }
+.alf-diff .diff-code, .alf-diff .diff-code-content { white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
 
 /* Shiki: strip wrapper background so the panel bg shows through cleanly */
 .alf-shiki pre {
@@ -81,9 +83,9 @@ html, body, #root {
   font-size: 0.8125rem;
   line-height: 1.6;
   font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
-  white-space: pre;
-  overflow-wrap: normal;
-  min-width: max-content;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .alf-shiki code {
   background: transparent !important;

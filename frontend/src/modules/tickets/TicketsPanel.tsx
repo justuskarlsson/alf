@@ -14,29 +14,30 @@ function TicketList({ repo }: { repo: string }) {
     selectedTicket: s.selectedTicket,
     selectTicket: s.selectTicket,
   })));
-  type StatusFilter = "all" | "open" | "future" | "done";
-  const FILTERS: StatusFilter[] = ["all", "open", "future", "done"];
+  type StatusFilter = "all" | "open" | "in-progress" | "future" | "done";
+  const FILTERS: StatusFilter[] = ["all", "open", "in-progress", "future", "done"];
   const [filter, setFilter] = useState<StatusFilter>("open");
 
   const filtered = filter === "all"
     ? tickets
     : tickets.filter(t => (t.status ?? "open") === filter);
 
-  function cycleFilter() {
-    setFilter(f => FILTERS[(FILTERS.indexOf(f) + 1) % FILTERS.length]);
-  }
-
   if (tickets.length === 0) return <EmptyState message="No tickets." />;
 
   return (
     <Panel>
       <PanelHeader title="Tickets">
-        <button
-          onClick={cycleFilter}
+        <select
+          value={filter}
+          onChange={e => setFilter(e.target.value as StatusFilter)}
           data-testid="filter-status"
-          className={`font-mono text-xs transition-colors ${filter === "all" ? "text-slate-300" : statusColor(filter)}`}
-          title="Cycle filter: all → open → future → done"
-        >{filter}</button>
+          className={`bg-transparent border-none font-mono text-xs transition-colors cursor-pointer
+                      focus:outline-none ${filter === "all" ? "text-slate-300" : statusColor(filter)}`}
+        >
+          {FILTERS.map(f => (
+            <option key={f} value={f} className="bg-alf-bg text-slate-300">{f}</option>
+          ))}
+        </select>
       </PanelHeader>
       <div className="flex-1 overflow-auto">
         <div className="divide-y divide-alf-muted">
@@ -75,15 +76,37 @@ function TicketList({ repo }: { repo: string }) {
   );
 }
 
-function TicketDetail() {
-  const selectedTicket = useTicketsStore(s => s.selectedTicket);
+function TicketDetail({ repo }: { repo: string }) {
+  const { request } = useRelay();
+  const { selectedTicket, spawnSession } = useTicketsStore(useShallow(s => ({
+    selectedTicket: s.selectedTicket,
+    spawnSession: s.spawnSession,
+  })));
 
   if (!selectedTicket) return <EmptyState message="Select a ticket" />;
 
   return (
     <Panel>
       <div className="px-3 py-2 border-b border-alf-border shrink-0 bg-alf-canvas">
-        <div className="font-mono text-sm text-slate-100">{selectedTicket.filename}</div>
+        <div className="flex items-center justify-between">
+          <div className="font-mono text-sm text-slate-100">{selectedTicket.filename}</div>
+          <div className="flex items-center gap-2">
+            {selectedTicket.session ? (
+              <span
+                className="text-xs font-mono text-sky-400/70 cursor-default"
+                title={`Linked session: ${selectedTicket.session}`}
+                data-testid="ticket-session-link"
+              >⚡ session linked</span>
+            ) : (
+              <button
+                onClick={() => spawnSession(repo, request)}
+                className="text-xs font-mono text-slate-500 hover:text-emerald-400 transition-colors"
+                title="Spawn agent session from this ticket"
+                data-testid="spawn-session-btn"
+              >▶ spawn session</button>
+            )}
+          </div>
+        </div>
         <div className="flex gap-2 mt-1 flex-wrap">
           {selectedTicket.status && (
             <span className={`text-xs font-mono ${statusColor(selectedTicket.status)}`}>
@@ -111,7 +134,8 @@ export function TicketsPanel({ repo }: { repo: string }) {
   const setTickets = useTicketsStore(s => s.setTickets);
 
   usePanelInit((request) => {
-    setTickets([]);
+    // Don't clear tickets eagerly — preserves selected ticket across reconnects.
+    // New data replaces the old when it arrives.
     request<{ tickets: TicketMeta[] }>({ type: "tickets/list", repo })
       .then(res => setTickets(res.tickets))
       .catch((err) => {
@@ -124,7 +148,7 @@ export function TicketsPanel({ repo }: { repo: string }) {
       defaultSize={35}
       minSize={20}
       sidebar={<TicketList repo={repo} />}
-      main={<TicketDetail />}
+      main={<TicketDetail repo={repo} />}
     />
   );
 }

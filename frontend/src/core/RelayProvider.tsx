@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -121,8 +122,13 @@ export function RelayProvider({ url, token, children }: Props) {
     return () => { connectHandlersRef.current.delete(cb); };
   }, []);
 
+  const value = useMemo(
+    () => ({ isConnected, request, subscribe, onConnect }),
+    [isConnected, request, subscribe, onConnect],
+  );
+
   return (
-    <RelayContext.Provider value={{ isConnected, request, subscribe, onConnect }}>
+    <RelayContext.Provider value={value}>
       {children}
     </RelayContext.Provider>
   );

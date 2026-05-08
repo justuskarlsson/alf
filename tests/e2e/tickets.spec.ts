@@ -6,20 +6,18 @@ test.describe("Tickets panel", () => {
     await goToRepo(page);
     const panel = page.locator('[data-testid="panel-tickets"]');
     await expect(panel).toBeVisible();
-    // Default filter is "open" — cycle to "done" (open → future → done) to find T-001
-    const btn = panel.getByTestId("filter-status");
-    await btn.click(); // open → future
-    await btn.click(); // future → done
+    // Default filter is "open" — switch to "done" to find T-001
+    const select = panel.getByTestId("filter-status");
+    await select.selectOption("done");
     await expect(panel.getByText("T-001").first()).toBeVisible();
   });
 
   test("click a ticket → detail pane shows title and content", async ({ page }) => {
     await goToRepo(page);
     const panel = page.locator('[data-testid="panel-tickets"]');
-    // Cycle to "done" to access T-001
-    const btn = panel.getByTestId("filter-status");
-    await btn.click(); // open → future
-    await btn.click(); // future → done
+    // Switch to "done" to access T-001
+    const select = panel.getByTestId("filter-status");
+    await select.selectOption("done");
     await panel.getByText("T-001").first().click();
     await expect(panel.getByText("Select a ticket")).not.toBeVisible();
     await expect(panel.getByText("T-001").first()).toBeVisible();
@@ -52,39 +50,39 @@ test.describe("Tickets panel", () => {
     expect(openCount).toBeGreaterThan(0);
   });
 
-  test("cycling filter: open → future → done → all", async ({ page }) => {
+  test("filter dropdown: open → in-progress → future → done → all", async ({ page }) => {
     await withTicketsPanel(page);
     await goToRepo(page);
     const panel = page.locator('[data-testid="panel-tickets"]');
     await expect(panel).toBeVisible();
     await expect(panel.getByText(/T-\d{3}/).first()).toBeVisible({ timeout: 5_000 });
 
-    const btn = panel.getByTestId("filter-status");
+    const select = panel.getByTestId("filter-status");
 
     // Default: "open"
-    await expect(btn).toHaveText("open");
+    await expect(select).toHaveValue("open");
 
-    // Click → "future"
-    await btn.click();
-    await expect(btn).toHaveText("future");
+    // Select "future"
+    await select.selectOption("future");
+    await expect(select).toHaveValue("future");
     await expect(panel.locator('[data-testid="ticket-status-future"]').first()).toBeVisible({ timeout: 3_000 });
     expect(await panel.locator('[data-testid="ticket-status-open"]').count()).toBe(0);
 
-    // Click → "done"
-    await btn.click();
-    await expect(btn).toHaveText("done");
+    // Select "done"
+    await select.selectOption("done");
+    await expect(select).toHaveValue("done");
     await expect(panel.locator('[data-testid="ticket-status-done"]').first()).toBeVisible({ timeout: 3_000 });
     expect(await panel.locator('[data-testid="ticket-status-future"]').count()).toBe(0);
 
-    // Click → "all"
-    await btn.click();
-    await expect(btn).toHaveText("all");
+    // Select "all"
+    await select.selectOption("all");
+    await expect(select).toHaveValue("all");
     // All statuses visible
     await expect(panel.locator('[data-testid="ticket-status-done"]').first()).toBeVisible({ timeout: 3_000 });
     await expect(panel.locator('[data-testid="ticket-status-open"]').first()).toBeVisible({ timeout: 3_000 });
 
-    // Click → back to "open"
-    await btn.click();
-    await expect(btn).toHaveText("open");
+    // Back to "open"
+    await select.selectOption("open");
+    await expect(select).toHaveValue("open");
   });
 });

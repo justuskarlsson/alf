@@ -36,6 +36,7 @@ export interface TicketMeta {
   epic?: string;
   status?: string;
   created?: string;
+  session?: string; // linked agent session id
 }
 
 export interface TicketFull extends TicketMeta {

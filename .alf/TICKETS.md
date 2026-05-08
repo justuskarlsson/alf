@@ -86,3 +86,7 @@ The frontmatter is always complete within the first 600 bytes of a well-formed t
 | ID | Title | Priority | Epic | Effort |
 |----|-------|----------|------|--------|
 | T-048 | Replace regex-based outline with AST parser (tree-sitter) | medium | files | L |
+| T-051 | Mobile: Stuff2Fix | medium | ui | XL |
+| T-052 | ~~Spawn agent sessions from tickets~~ | medium | agents | L |
+| T-053 | ~~Sort repos by most recent activity~~ | medium | repos | S |
+| T-054 | E-ink tablet support: layout + stylus annotation | low | ui | L |

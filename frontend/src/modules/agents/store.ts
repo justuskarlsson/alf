@@ -98,32 +98,45 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   lastSeenMap: JSON.parse(localStorage.getItem("alf-agent-last-seen") || "{}"),
 
   loadSessions: (repo, request) => {
-    // Unsubscribe from the previously selected session (may be from a different repo)
-    const prev = get().selectedSessionId;
-    if (prev) {
-      request<AgentUnsubscribeMsg>({ type: "agent/unsubscribe", sessionId: prev }).catch(console.error);
+    const isRepoChange = get().currentRepo !== repo;
+
+    if (isRepoChange) {
+      // Unsubscribe from the previously selected session (different repo)
+      const prev = get().selectedSessionId;
+      if (prev) {
+        request<AgentUnsubscribeMsg>({ type: "agent/unsubscribe", sessionId: prev }).catch(console.error);
+      }
+      // Clear all session-specific state so stale data from old repo doesn't leak
+      set({
+        sessions: [],
+        selectedSessionId: null,
+        currentRepo: repo,
+        turns: [],
+        activities: [],
+        hiddenCounts: {},
+        live: null,
+        isRunning: false,
+        pendingPrompt: null,
+        contextUsage: null,
+        lastCoord: null,
+      });
+    } else {
+      // Same repo (reconnect) — re-subscribe if we had a selected session
+      const prev = get().selectedSessionId;
+      if (prev) {
+        request<AgentSubscribeMsg>({ type: "agent/subscribe", sessionId: prev }).catch(console.error);
+      }
     }
-    // Clear all session-specific state so stale data from old repo doesn't leak
-    set({
-      sessions: [],
-      selectedSessionId: null,
-      currentRepo: repo,
-      turns: [],
-      activities: [],
-      hiddenCounts: {},
-      live: null,
-      isRunning: false,
-      pendingPrompt: null,
-      contextUsage: null,
-      lastCoord: null,
-    });
+
     request<{ sessions: AgentSession[] }>({ type: "agent/sessions/list", repo })
       .then(res => {
         set({ sessions: res.sessions.sort((a, b) => b.updated_at - a.updated_at) });
-        // Auto-restore persisted session for this repo
-        const persisted = getPersistedSession(repo);
-        if (persisted && res.sessions.some(s => s.id === persisted)) {
-          get().selectSession(persisted, request);
+        if (isRepoChange) {
+          // Auto-restore persisted session for this repo
+          const persisted = getPersistedSession(repo);
+          if (persisted && res.sessions.some(s => s.id === persisted)) {
+            get().selectSession(persisted, request);
+          }
         }
       })
       .catch((err) => {
