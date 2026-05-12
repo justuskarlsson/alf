@@ -1,11 +1,12 @@
 [Unit]
-Description=Alf Dev — Frontend
+Description=Alf Dev — Frontend (static build)
 After=alf-dev-relay.service
 
 [Service]
 Type=simple
 WorkingDirectory=%h/repos/alf/frontend
-ExecStart=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/frontend/node_modules/.bin/vite
+ExecStartPre=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/frontend/node_modules/.bin/vite build
+ExecStart=%h/repos/alf/infra/scripts/run-with-profile.sh %h/repos/alf/frontend/node_modules/.bin/vite preview
 EnvironmentFile=%h/repos/alf/infra/.env.dev
 Restart=on-failure
 RestartSec=2

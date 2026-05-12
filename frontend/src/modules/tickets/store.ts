@@ -2,14 +2,26 @@ import { create } from "zustand";
 import type { TicketMeta, TicketFull } from "@alf/types";
 
 export type { TicketMeta, TicketFull };
+export type StatusFilter = "all" | "open" | "in-progress" | "future" | "done";
 
 type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
+
+const STORAGE_KEY = "alf-ticket-default-filter";
+function loadDefaultFilter(): StatusFilter {
+  try { return (localStorage.getItem(STORAGE_KEY) as StatusFilter) ?? "open"; } catch { return "open"; }
+}
 
 interface TicketsStore {
   tickets: TicketMeta[];
   setTickets: (tickets: TicketMeta[]) => void;
   selectedTicket: TicketFull | null;
   selectTicket: (id: string, repo: string, request: WsRequest) => void;
+  /** Current active filter (persists in store across dashboard switches). */
+  filter: StatusFilter;
+  setFilter: (f: StatusFilter) => void;
+  /** Default filter restored on mount (persisted in localStorage). */
+  defaultFilter: StatusFilter;
+  setDefaultFilter: (f: StatusFilter) => void;
   /** Spawn a new agent session from the currently selected ticket. */
   spawnSession: (repo: string, request: WsRequest) => void;
 }
@@ -18,6 +30,13 @@ export const useTicketsStore = create<TicketsStore>((set, get) => ({
   tickets: [],
   setTickets: (tickets) => set({ tickets }),
   selectedTicket: null,
+  filter: loadDefaultFilter(),
+  setFilter: (filter) => set({ filter }),
+  defaultFilter: loadDefaultFilter(),
+  setDefaultFilter: (f) => {
+    localStorage.setItem(STORAGE_KEY, f);
+    set({ defaultFilter: f, filter: f });
+  },
   selectTicket: (id, repo, request) => {
     request<{ ticket: TicketFull }>({ type: "tickets/get", repo, id })
       .then(res => set({ selectedTicket: res.ticket }))

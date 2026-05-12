@@ -1,22 +1,25 @@
-import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
 import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
-import { useTicketsStore, type TicketMeta } from "./store";
+import { useTicketsStore, type TicketMeta, type StatusFilter } from "./store";
+
+const FILTERS: StatusFilter[] = ["all", "open", "in-progress", "future", "done"];
 
 function TicketList({ repo }: { repo: string }) {
   const { request } = useRelay();
-  const { tickets, selectedTicket, selectTicket } = useTicketsStore(useShallow(s => ({
-    tickets: s.tickets,
-    selectedTicket: s.selectedTicket,
-    selectTicket: s.selectTicket,
-  })));
-  type StatusFilter = "all" | "open" | "in-progress" | "future" | "done";
-  const FILTERS: StatusFilter[] = ["all", "open", "in-progress", "future", "done"];
-  const [filter, setFilter] = useState<StatusFilter>("open");
+  const { tickets, selectedTicket, selectTicket, filter, setFilter, defaultFilter, setDefaultFilter } =
+    useTicketsStore(useShallow(s => ({
+      tickets: s.tickets,
+      selectedTicket: s.selectedTicket,
+      selectTicket: s.selectTicket,
+      filter: s.filter,
+      setFilter: s.setFilter,
+      defaultFilter: s.defaultFilter,
+      setDefaultFilter: s.setDefaultFilter,
+    })));
 
   const filtered = filter === "all"
     ? tickets
@@ -24,20 +27,33 @@ function TicketList({ repo }: { repo: string }) {
 
   if (tickets.length === 0) return <EmptyState message="No tickets." />;
 
+  const isDefault = filter === defaultFilter;
+
   return (
     <Panel>
       <PanelHeader title="Tickets">
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value as StatusFilter)}
-          data-testid="filter-status"
-          className={`bg-transparent border-none font-mono text-xs transition-colors cursor-pointer
-                      focus:outline-none ${filter === "all" ? "text-slate-300" : statusColor(filter)}`}
-        >
-          {FILTERS.map(f => (
-            <option key={f} value={f} className="bg-alf-bg text-slate-300">{f}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setDefaultFilter(filter)}
+            disabled={isDefault}
+            title={isDefault ? `"${filter}" is the default` : `Make "${filter}" the default filter`}
+            className={`font-mono text-xs transition-colors px-0.5
+              ${isDefault ? "text-slate-600 cursor-default" : "text-slate-500 hover:text-slate-200"}`}
+          >
+            {isDefault ? "●" : "○"}
+          </button>
+          <select
+            value={filter}
+            onChange={e => setFilter(e.target.value as StatusFilter)}
+            data-testid="filter-status"
+            className={`bg-transparent border-none font-mono text-xs transition-colors cursor-pointer
+                        focus:outline-none ${filter === "all" ? "text-slate-300" : statusColor(filter)}`}
+          >
+            {FILTERS.map(f => (
+              <option key={f} value={f} className="bg-alf-bg text-slate-300">{f}</option>
+            ))}
+          </select>
+        </div>
       </PanelHeader>
       <div className="flex-1 overflow-auto">
         <div className="divide-y divide-alf-muted">

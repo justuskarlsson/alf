@@ -158,7 +158,10 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     request<DetailResponse>({ type: "agent/session/detail", sessionId: id })
       .then(res => {
         const { textActivities, hiddenCounts } = filterActivities(res.activities);
-        set({ turns: res.turns, activities: textActivities, hiddenCounts, lastCoord: res.lastCoord, contextUsage: res.contextUsage ?? null });
+        // Derive isRunning: if the last turn has no completed_at, session is still running
+        const lastTurn = res.turns.length > 0 ? res.turns[res.turns.length - 1] : null;
+        const stillRunning = lastTurn !== null && lastTurn.completed_at === null;
+        set({ turns: res.turns, activities: textActivities, hiddenCounts, lastCoord: res.lastCoord, contextUsage: res.contextUsage ?? null, isRunning: stillRunning });
       })
       .catch(console.error);
     request<AgentSubscribeMsg>({ type: "agent/subscribe", sessionId: id })

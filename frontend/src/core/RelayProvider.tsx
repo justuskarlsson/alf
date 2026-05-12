@@ -62,7 +62,13 @@ export function RelayProvider({ url, token, children }: Props) {
       url,
       token,
       onEvent(msg) {
-        // 1. Request/response: match by requestId
+        // 1. Backend server came back after disconnect — re-fire connect handlers
+        if (msg.type === "server-connected") {
+          connectHandlersRef.current.forEach(cb => cb());
+          return;
+        }
+
+        // 2. Request/response: match by requestId
         const rid = msg.requestId as string | undefined;
         if (rid) {
           const pending = pendingRef.current.get(rid);
@@ -74,7 +80,7 @@ export function RelayProvider({ url, token, children }: Props) {
             return;
           }
         }
-        // 2. Push event: dispatch to type subscribers
+        // 3. Push event: dispatch to type subscribers
         const type = msg.type as string | undefined;
         if (type) subscribersRef.current.get(type)?.forEach(h => h(msg));
       },

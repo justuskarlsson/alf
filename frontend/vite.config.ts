@@ -47,6 +47,9 @@ export default defineConfig({
     },
   },
   server: {
+    port: parseInt(process.env.FRONTEND_DEV_PORT ?? "5100", 10),
+  },
+  preview: {
     port: parseInt(process.env.FRONTEND_PORT ?? "5173", 10),
   },
 });
