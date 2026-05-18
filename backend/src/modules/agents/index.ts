@@ -127,13 +127,13 @@ export class AgentsModule {
         ...(result.usage ? { usage: result.usage } : {}),
       }))
       .catch((err) => {
-        // Aborted turns are expected — still send turn/done so frontend clears isRunning
-        if (abort.signal.aborted) {
-          fanOut(sid, connectionId, { type: "agent/turn/done", sessionId: sid });
-          return;
+        // Always send turn/done so frontend clears isRunning — even on crash
+        // (turn is already marked complete in DB by core/agents catch block)
+        fanOut(sid, connectionId, { type: "agent/turn/done", sessionId: sid });
+        if (!abort.signal.aborted) {
+          log.error("runTurn failed", { error: String(err), sessionId: sid });
+          push(connectionId, { type: "agent/error", sessionId: sid, error: String(err) });
         }
-        log.error("runTurn failed", { error: String(err), sessionId: sid });
-        push(connectionId, { type: "agent/error", sessionId: sid, error: String(err) });
       })
       .finally(() => runningTurns.delete(sid));
   }

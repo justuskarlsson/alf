@@ -98,52 +98,90 @@ async function runTurnInner(
   // 0-based within this turn — resets each turn. Replay uses (turn.idx, activity.idx) composite.
   let activityIdx = 0;
   let currentType: ActivityType | null = null;
+  let toolCharsStreamed = 0; // chars forwarded for current tool activity
   let turnUsage: ContextUsage | undefined;
 
-  const result = await impl(
-    prompt,
-    { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path, model },
-    (event) => {
-      if (signal?.aborted) return; // suppress events after abort
+  let turnCompleted = false;
 
-      if (event.event === "session_ready") {
-        // Persist immediately and notify caller
-        if (!session.sdk_session_id) {
-          dbSessions.setSdkSessionId(sessionId, event.sdkSessionId);
+  try {
+    const result = await impl(
+      prompt,
+      { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path, model },
+      (event) => {
+        if (signal?.aborted) return; // suppress events after abort
+
+        if (event.event === "session_ready") {
+          // Persist immediately and notify caller
+          if (!session.sdk_session_id) {
+            dbSessions.setSdkSessionId(sessionId, event.sdkSessionId);
+          }
+          onSessionReady(event.sdkSessionId);
+
+        } else if (event.event === "activity_start") {
+          currentType = event.activityType;
+          toolCharsStreamed = 0;
+
+        } else if (event.event === "activity_delta") {
+          // Tool deltas are huge (file edits) and cause frontend render thrashing.
+          // Only forward the first chunk (truncated) so the UI knows a tool is active;
+          // full content is persisted on activity_end and fetched on turnDone.
+          if (event.activityType === "tool") {
+            const CAP = 100;
+            if (toolCharsStreamed < CAP) {
+              // Forward chunks until we've sent enough for a readable hint
+              const remaining = CAP - toolCharsStreamed;
+              const chunk = event.content.length > remaining
+                ? event.content.slice(0, remaining) + "…"
+                : event.content;
+              toolCharsStreamed += event.content.length;
+              sink({ sessionId, activityType: event.activityType, content: chunk, idx: activityIdx });
+            }
+            // Past cap: skip (no sink call)
+          } else {
+            sink({ sessionId, activityType: event.activityType, content: event.content, idx: activityIdx });
+          }
+
+        } else if (event.event === "activity_end") {
+          // Persist completed activity
+          dbActivities.create(turn.id, sessionId, event.activityType, event.content, activityIdx);
+          activityIdx++;
+          currentType = null;
+
+        } else if (event.event === "turn_done") {
+          const usage = event.usage
+            ? { inputTokens: event.usage.contextTokens, outputTokens: 0, contextWindow: event.usage.maxContextTokens }
+            : undefined;
+          dbTurns.complete(turn.id, usage);
+          turnCompleted = true;
+          dbSessions.touch(sessionId);
+          if (event.usage) turnUsage = event.usage;
         }
-        onSessionReady(event.sdkSessionId);
+      },
+      signal,
+    );
 
-      } else if (event.event === "activity_start") {
-        currentType = event.activityType;
+    // Fallback: persist sdkSessionId from return value if session_ready was never emitted
+    if (result.sdkSessionId && !session.sdk_session_id) {
+      dbSessions.setSdkSessionId(sessionId, result.sdkSessionId);
+      onSessionReady(result.sdkSessionId);
+    }
 
-      } else if (event.event === "activity_delta") {
-        // Forward to live subscribers immediately
-        sink({ sessionId, activityType: event.activityType, content: event.content, idx: activityIdx });
+    void currentType; // suppress unused warning — tracked for potential partial-write recovery
 
-      } else if (event.event === "activity_end") {
-        // Persist completed activity
-        dbActivities.create(turn.id, sessionId, event.activityType, event.content, activityIdx);
-        activityIdx++;
-        currentType = null;
+    // Safety net: if impl returned without emitting turn_done, mark turn complete now
+    if (!turnCompleted) {
+      dbTurns.complete(turn.id);
+      turnCompleted = true;
+      dbSessions.touch(sessionId);
+    }
 
-      } else if (event.event === "turn_done") {
-        const usage = event.usage
-          ? { inputTokens: event.usage.contextTokens, outputTokens: 0, contextWindow: event.usage.maxContextTokens }
-          : undefined;
-        dbTurns.complete(turn.id, usage);
-        dbSessions.touch(sessionId);
-        if (event.usage) turnUsage = event.usage;
-      }
-    },
-    signal,
-  );
-
-  // Fallback: persist sdkSessionId from return value if session_ready was never emitted
-  if (result.sdkSessionId && !session.sdk_session_id) {
-    dbSessions.setSdkSessionId(sessionId, result.sdkSessionId);
-    onSessionReady(result.sdkSessionId);
+    return { usage: turnUsage };
+  } catch (err) {
+    // Ensure turn is always marked complete, even on crash (usage limit, network error, etc.)
+    if (!turnCompleted) {
+      dbTurns.complete(turn.id);
+      dbSessions.touch(sessionId);
+    }
+    throw err; // re-throw so the handler can still react to the error
   }
-
-  void currentType; // suppress unused warning — tracked for potential partial-write recovery
-  return { usage: turnUsage };
 }
