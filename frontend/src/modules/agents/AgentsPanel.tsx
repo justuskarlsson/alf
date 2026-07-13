@@ -4,7 +4,7 @@ import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
 import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
-import { useAgentsStore, AVAILABLE_IMPLS, MODEL_OPTIONS, type LiveState } from "./store";
+import { useAgentsStore, MODELS, type LiveState } from "./store";
 import { useAnnotationStore } from "../../core/annotationStore";
 import { useVoiceRecorder } from "../../core/useVoiceRecorder";
 import type { AgentActivity, AgentDelta, AgentSession, AgentTurn, ContextUsage } from "@alf/types";
@@ -173,7 +173,7 @@ function ChatView({ repo }: { repo: string }) {
   const { request } = useRelay();
   const {
     selectedSessionId, turns, activities, hiddenCounts, live, isRunning, pendingPrompt,
-    forkSession, selectedImpl, setSelectedImpl, selectedModel, setSelectedModel,
+    forkSession, selectedModel, setSelectedModel,
     contextUsage,
   } = useAgentsStore(useShallow(s => ({
     selectedSessionId: s.selectedSessionId,
@@ -184,8 +184,6 @@ function ChatView({ repo }: { repo: string }) {
     isRunning: s.isRunning,
     pendingPrompt: s.pendingPrompt,
     forkSession: s.forkSession,
-    selectedImpl: s.selectedImpl,
-    setSelectedImpl: s.setSelectedImpl,
     selectedModel: s.selectedModel,
     setSelectedModel: s.setSelectedModel,
     contextUsage: s.contextUsage,
@@ -198,29 +196,16 @@ function ChatView({ repo }: { repo: string }) {
       <PanelHeader title="Chat">
         <div className="flex items-center gap-1.5">
           <select
-            value={selectedImpl}
-            onChange={e => setSelectedImpl(e.target.value)}
-            data-testid="impl-selector"
+            value={selectedModel}
+            onChange={e => setSelectedModel(e.target.value)}
+            data-testid="model-selector"
             className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
                        text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
           >
-            {AVAILABLE_IMPLS.map(impl => (
-              <option key={impl} value={impl}>{impl}</option>
+            {MODELS.map(m => (
+              <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
-          {MODEL_OPTIONS[selectedImpl] && (
-            <select
-              value={selectedModel}
-              onChange={e => setSelectedModel(e.target.value)}
-              data-testid="model-selector"
-              className="bg-alf-bg border border-alf-border rounded px-1.5 py-0.5 font-mono text-xs
-                         text-slate-400 focus:outline-none focus:border-slate-500 transition-colors"
-            >
-              {MODEL_OPTIONS[selectedImpl].map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          )}
           {turns.length > 0 && (
             <button
               onClick={() => forkSession(request)}

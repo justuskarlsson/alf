@@ -1,24 +1,30 @@
 /**
- * Shared types for the agents core layer and impl interface.
+ * Shared types for the agents core layer.
+ *
+ * There is a single agent backend (the Cursor SDK), so there is no longer an
+ * "impl" abstraction — core drives the Cursor driver directly. These types
+ * describe the event stream the driver emits and the data core persists.
  */
 
 export type ActivityType = "thinking" | "tool" | "text";
 
 /** Snapshot of context window consumption at end of a turn. */
 export interface ContextUsage {
-  contextTokens: number;   // tokens currently in context window
+  contextTokens: number;    // tokens currently in context window
   maxContextTokens: number; // model's context window size
 }
 
 /**
- * Events emitted by an impl during a turn.
- * Core listens to these and writes to DB / forwards to stream subscribers.
+ * Events emitted by the driver during a turn.
+ *
+ * Full-activity model: the driver emits an activity only once it is complete
+ * (no per-token deltas). Core persists on `activity_end` and forwards a single
+ * live update to subscribers.
  */
 export type ActivityEvent =
+  | { event: "session_ready"; sdkSessionId: string }
   | { event: "activity_start"; activityType: ActivityType }
-  | { event: "activity_delta"; activityType: ActivityType; content: string }
   | { event: "activity_end";   activityType: ActivityType; content: string }
-  | { event: "session_ready";  sdkSessionId: string }
   | { event: "turn_done"; usage?: ContextUsage };
 
 /** Result returned from runTurn's done promise. */
@@ -26,30 +32,21 @@ export interface TurnResult {
   usage?: ContextUsage;
 }
 
-/** Context passed to an impl on each turn. */
-export interface ImplContext {
+/** Context passed to the driver on each turn. */
+export interface TurnContext {
   sessionId: string;
-  sdkSessionId?: string; // absent on first turn; set by impl result, then persisted
-  repo: string;          // absolute path to the target repo
-  model?: string;        // model override (e.g. "claude-opus-4-6"); impl decides whether to use it
+  sdkSessionId?: string; // absent on first turn; the Cursor agentId, persisted by core
+  repo: string;          // repo path relative to REPOS_ROOT
+  model?: string;        // Cursor model id override (e.g. "composer-2.5")
 }
 
-/**
- * The impl interface. A lightweight adapter — mostly plumbing.
- * Returns sdkSessionId on first turn so core can persist it.
- */
-export type ImplFn = (
-  prompt: string,
-  ctx: ImplContext,
-  emit: (event: ActivityEvent) => void,
-  signal?: AbortSignal,
-) => Promise<{ sdkSessionId?: string }>;
-
-/** A live delta forwarded to stream subscribers. */
+/** A live update forwarded to stream subscribers, one per activity. */
 export interface LiveDelta {
   sessionId: string;
   activityType: ActivityType;
   content: string;
   /** 0-based index of this activity within its turn (resets to 0 each turn). */
   idx: number;
+  /** false = activity started (placeholder), true = full content delivered. */
+  done: boolean;
 }

@@ -70,7 +70,7 @@ Drag-and-drop panel layout with saveable presets per repo. Want a focused agent 
 │  Backend  (Node.js, TypeScript, SQLite)                  │
 │  Core: dispatch (@handle decorator), DB DAL, logger      │
 │  Modules: agents, files, git, tickets, repos             │
-│  Agent Impls: claude-code (SDK), test (deterministic)    │
+│  Agent backend: Cursor SDK (@cursor/sdk, local runtime)  │
 └─────────────────────────────────────────────────────────┘
 ```
 

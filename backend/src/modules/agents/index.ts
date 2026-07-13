@@ -2,6 +2,9 @@
  * Agents module — WS handlers for agent/session/create, agent/message,
  * agent/subscribe, agent/unsubscribe, agent/sessions/list, agent/session/detail.
  * Handlers at top. Helpers below (hoisted).
+ *
+ * There is a single agent backend (the Cursor SDK), so sessions are always
+ * created with impl "cursor" and there is no impl dispatch.
  */
 
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
@@ -10,11 +13,7 @@ import { handle, push, type Reply } from "../../core/dispatch.js";
 import { ALF_DIR, REPOS_ROOT } from "../../core/config.js";
 import { initSession, runTurn, type StreamSink } from "../../core/agents/index.js";
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../../core/db/index.js";
-import { testImpl } from "./implementations/test.js";
-import { claudeCodeImpl } from "./implementations/claude-code.js";
-import { codexImpl } from "./implementations/codex.js";
 import { createLogger } from "../../core/logger.js";
-import type { ImplFn } from "../../core/agents/types.js";
 
 const log = createLogger("agents");
 
@@ -24,13 +23,7 @@ const subscribers = new Map<string, Set<string>>();
 /** sessionId → AbortController for the currently running turn. */
 const runningTurns = new Map<string, AbortController>();
 
-const IMPLS: Record<string, ImplFn> = {
-  test: testImpl,
-  "claude-code": claudeCodeImpl,
-  codex: codexImpl,
-};
-
-const DEFAULT_IMPL = process.env.DEFAULT_IMPL ?? "test";
+const IMPL = "cursor";
 
 // ---------------------------------------------------------------------------
 // Handlers
@@ -40,8 +33,8 @@ export class AgentsModule {
   /** Create a new empty session, or fork an existing one. */
   @handle("agent/session/create")
   static createSession(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, impl = DEFAULT_IMPL, forkedFrom } = msg as {
-      repo?: string; impl?: string;
+    const { repo, forkedFrom } = msg as {
+      repo?: string;
       forkedFrom?: { sessionId: string; turnIdx?: number };
     };
 
@@ -54,7 +47,7 @@ export class AgentsModule {
 
     // Normal create
     if (!repo) { reply({ type: "agent/session/create", error: "repo required" }); return; }
-    const sessionId = initSession(repo, impl);
+    const sessionId = initSession(repo, IMPL);
     reply({ type: "agent/session/create", sessionId });
   }
 
@@ -65,37 +58,21 @@ export class AgentsModule {
    */
   @handle("agent/message")
   static message(msg: Record<string, unknown>, reply: Reply) {
-    const { repo, sessionId, prompt, impl = DEFAULT_IMPL, model, files } = msg as {
-      repo?: string; sessionId?: string; prompt?: string; impl?: string; model?: string;
+    const { repo, sessionId, prompt, model, files } = msg as {
+      repo?: string; sessionId?: string; prompt?: string; model?: string;
       files?: { name: string; base64: string; mimeType: string }[];
     };
     const connectionId = msg.connectionId as string;
 
     if (!prompt) { reply({ type: "agent/message", error: "prompt required" }); return; }
 
-    const sid = sessionId ?? (repo ? initSession(repo, impl) : null);
+    const sid = sessionId ?? (repo ? initSession(repo, IMPL) : null);
     if (!sid) { reply({ type: "agent/message", error: "repo or sessionId required" }); return; }
 
-    // Detect impl switch (e.g. claude-code → codex). Clear SDK session so adapter
-    // starts a fresh thread, and prepend conversation history from our DB.
     const session = dbSessions.get(sid);
-    if (session && impl && session.impl !== impl) {
-      log.info("Impl switch detected", { from: session.impl, to: impl, sessionId: sid });
-      dbSessions.setSdkSessionId(sid, null);  // clear stale SDK session
-      dbSessions.update(sid, { impl });     // update session to new impl
-    }
 
-    // Save uploaded files to .alf/uploads/{sessionId}/ and build prompt suffix
+    // Save uploaded files to .alf/uploads/{sessionId}/ and append references to the prompt.
     let fullPrompt = prompt;
-
-    // If switching impl, prepend conversation history so the new agent has context
-    if (session && impl && session.impl !== impl) {
-      const history = buildConversationHistory(sid);
-      if (history) {
-        fullPrompt = history + "\n\n---\n\n" + prompt;
-      }
-    }
-
     if (files?.length) {
       const repoRow = session ? dbRepos.get(session.repo_id) : null;
       if (repoRow) {
@@ -106,8 +83,6 @@ export class AgentsModule {
       }
     }
 
-    const implFn = IMPLS[impl] ?? testImpl;
-
     const sink: StreamSink = (delta) => {
       fanOut(sid, connectionId, { type: "agent/delta", ...delta });
     };
@@ -115,7 +90,7 @@ export class AgentsModule {
     const abort = new AbortController();
     runningTurns.set(sid, abort);
 
-    const { done } = runTurn(sid, fullPrompt, implFn, sink, model, abort.signal);
+    const { done } = runTurn(sid, fullPrompt, sink, model, abort.signal);
 
     // Reply immediately — client needs sessionId to subscribe.
     // sdkSessionId is persisted to DB internally by runTurn (via session_ready event).
@@ -300,42 +275,4 @@ function uniqueName(dir: string, name: string): string {
   let i = 1;
   while (existsSync(join(dir, `${stem}-${i}${ext}`))) i++;
   return `${stem}-${i}${ext}`;
-}
-
-/**
- * Build a text summary of the session's conversation history from DB.
- * Used when switching impls so the new agent gets prior context.
- * Returns null if there's no history worth including.
- */
-function buildConversationHistory(sessionId: string): string | null {
-  const turns = dbTurns.list(sessionId);
-  if (turns.length === 0) return null;
-
-  const activities = dbActivities.listForSession(sessionId);
-  // Group activities by turn_id for O(1) lookup
-  const actsByTurn = new Map<string, typeof activities>();
-  for (const a of activities) {
-    let arr = actsByTurn.get(a.turn_id);
-    if (!arr) { arr = []; actsByTurn.set(a.turn_id, arr); }
-    arr.push(a);
-  }
-
-  const parts: string[] = [
-    "The following is a conversation history from a previous agent session. Continue from where it left off.\n",
-  ];
-
-  for (const turn of turns) {
-    parts.push(`[User]: ${turn.prompt}`);
-    const turnActs = actsByTurn.get(turn.id) ?? [];
-    for (const act of turnActs) {
-      if (act.type === "text") {
-        parts.push(`[Assistant]: ${act.content}`);
-      } else if (act.type === "tool") {
-        parts.push(`[Tool]: ${act.content}`);
-      }
-      // Skip thinking — internal, not useful as context
-    }
-  }
-
-  return parts.join("\n\n");
 }

@@ -86,6 +86,7 @@ export interface AgentDelta {
   activityType: "thinking" | "tool" | "text";
   content: string;
   idx: number; // changes when a new activity starts within the turn
+  done?: boolean; // false = activity just started (placeholder), true = full content delivered
 }
 
 export interface AgentLastCoord {

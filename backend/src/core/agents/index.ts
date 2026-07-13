@@ -1,22 +1,23 @@
 /**
- * Agents core — session lifecycle, turn tracking, impl dispatch.
+ * Agents core — session lifecycle, turn tracking, Cursor driver dispatch.
  * This is the 10% of code that 90% of the agent flow runs through.
  *
- * Core writes to DB and forwards live deltas to the stream sink.
- * It knows nothing about relay, websockets, or specific impls.
+ * Core writes to DB and forwards live activity updates to the stream sink.
+ * It knows nothing about relay or websockets.
  */
 
 import { dbRepos, dbSessions, dbTurns, dbActivities } from "../db/index.js";
-import type { ImplFn, ActivityType, LiveDelta, TurnResult, ContextUsage } from "./types.js";
+import { runCursorTurn } from "./cursor.js";
+import type { ActivityType, LiveDelta, TurnResult, ContextUsage } from "./types.js";
 
 export type { LiveDelta, TurnResult, ContextUsage };
 
-/** Called by the handler for each delta during a turn. */
+/** Called by the handler for each live activity update during a turn. */
 export type StreamSink = (delta: LiveDelta) => void;
 
 /** Returned by runTurn — two promises the caller can await independently. */
 export interface TurnHandle {
-  /** Resolves with sdkSessionId as soon as the impl surfaces it, or undefined if N/A. */
+  /** Resolves with sdkSessionId as soon as the driver surfaces it, or undefined if N/A. */
   sessionReady: Promise<string | undefined>;
   /** Resolves when the full turn completes (all activities persisted). */
   done: Promise<TurnResult>;
@@ -27,7 +28,7 @@ export interface TurnHandle {
 // ---------------------------------------------------------------------------
 
 /** Create a new session scoped to a repo. Returns the sessionId. */
-export function initSession(repoPath: string, impl = "test"): string {
+export function initSession(repoPath: string, impl = "cursor"): string {
   const repo = dbRepos.upsert(repoPath);
   return dbSessions.create(repo.id, impl).id;
 }
@@ -47,7 +48,6 @@ export function initSession(repoPath: string, impl = "test"): string {
 export function runTurn(
   sessionId: string,
   prompt: string,
-  impl: ImplFn,
   sink: StreamSink,
   model?: string,
   signal?: AbortSignal,
@@ -56,14 +56,14 @@ export function runTurn(
   const sessionReady = new Promise<string | undefined>(r => { resolveSessionReady = r; });
   let sessionReadyFired = false;
 
-  const done = runTurnInner(sessionId, prompt, impl, sink, model, signal, (sdkSessionId) => {
+  const done = runTurnInner(sessionId, prompt, sink, model, signal, (sdkSessionId) => {
     if (!sessionReadyFired) {
       sessionReadyFired = true;
       resolveSessionReady(sdkSessionId);
     }
   });
 
-  // Guarantee sessionReady always resolves — even if turn errors or impl never emits session_ready.
+  // Guarantee sessionReady always resolves — even if the turn errors early.
   done.finally(() => {
     if (!sessionReadyFired) {
       sessionReadyFired = true;
@@ -81,7 +81,6 @@ export function runTurn(
 async function runTurnInner(
   sessionId: string,
   prompt: string,
-  impl: ImplFn,
   sink: StreamSink,
   model: string | undefined,
   signal: AbortSignal | undefined,
@@ -98,60 +97,39 @@ async function runTurnInner(
   // 0-based within this turn — resets each turn. Replay uses (turn.idx, activity.idx) composite.
   let activityIdx = 0;
   let currentType: ActivityType | null = null;
-  let toolCharsStreamed = 0; // chars forwarded for current tool activity
   let turnUsage: ContextUsage | undefined;
-
   let turnCompleted = false;
 
   try {
-    const result = await impl(
+    const result = await runCursorTurn(
       prompt,
       { sessionId, sdkSessionId: session.sdk_session_id ?? undefined, repo: repo.path, model },
       (event) => {
         if (signal?.aborted) return; // suppress events after abort
 
         if (event.event === "session_ready") {
-          // Persist immediately and notify caller
-          if (!session.sdk_session_id) {
-            dbSessions.setSdkSessionId(sessionId, event.sdkSessionId);
-          }
+          if (!session.sdk_session_id) dbSessions.setSdkSessionId(sessionId, event.sdkSessionId);
           onSessionReady(event.sdkSessionId);
 
         } else if (event.event === "activity_start") {
           currentType = event.activityType;
-          toolCharsStreamed = 0;
-
-        } else if (event.event === "activity_delta") {
-          // Tool deltas are huge (file edits) and cause frontend render thrashing.
-          // Only forward the first chunk (truncated) so the UI knows a tool is active;
-          // full content is persisted on activity_end and fetched on turnDone.
-          if (event.activityType === "tool") {
-            const CAP = 100;
-            if (toolCharsStreamed < CAP) {
-              // Forward chunks until we've sent enough for a readable hint
-              const remaining = CAP - toolCharsStreamed;
-              const chunk = event.content.length > remaining
-                ? event.content.slice(0, remaining) + "…"
-                : event.content;
-              toolCharsStreamed += event.content.length;
-              sink({ sessionId, activityType: event.activityType, content: chunk, idx: activityIdx });
-            }
-            // Past cap: skip (no sink call)
-          } else {
-            sink({ sessionId, activityType: event.activityType, content: event.content, idx: activityIdx });
-          }
+          // Live placeholder so the UI can show the in-progress activity type.
+          sink({ sessionId, activityType: event.activityType, content: "", idx: activityIdx, done: false });
 
         } else if (event.event === "activity_end") {
-          // Persist completed activity
+          // Persist the full activity, then forward it live (tool content capped).
           dbActivities.create(turn.id, sessionId, event.activityType, event.content, activityIdx);
+          const live = event.activityType === "tool" && event.content.length > TOOL_LIVE_CAP
+            ? event.content.slice(0, TOOL_LIVE_CAP) + "…"
+            : event.content;
+          sink({ sessionId, activityType: event.activityType, content: live, idx: activityIdx, done: true });
           activityIdx++;
           currentType = null;
 
         } else if (event.event === "turn_done") {
-          const usage = event.usage
+          dbTurns.complete(turn.id, event.usage
             ? { inputTokens: event.usage.contextTokens, outputTokens: 0, contextWindow: event.usage.maxContextTokens }
-            : undefined;
-          dbTurns.complete(turn.id, usage);
+            : undefined);
           turnCompleted = true;
           dbSessions.touch(sessionId);
           if (event.usage) turnUsage = event.usage;
@@ -160,15 +138,15 @@ async function runTurnInner(
       signal,
     );
 
-    // Fallback: persist sdkSessionId from return value if session_ready was never emitted
+    // Fallback: persist sdkSessionId from return value if session_ready was never emitted.
     if (result.sdkSessionId && !session.sdk_session_id) {
       dbSessions.setSdkSessionId(sessionId, result.sdkSessionId);
       onSessionReady(result.sdkSessionId);
     }
 
-    void currentType; // suppress unused warning — tracked for potential partial-write recovery
+    void currentType; // tracked for potential partial-write recovery
 
-    // Safety net: if impl returned without emitting turn_done, mark turn complete now
+    // Safety net: mark the turn complete if the driver returned without turn_done.
     if (!turnCompleted) {
       dbTurns.complete(turn.id);
       turnCompleted = true;
@@ -177,7 +155,7 @@ async function runTurnInner(
 
     return { usage: turnUsage };
   } catch (err) {
-    // Ensure turn is always marked complete, even on crash (usage limit, network error, etc.)
+    // Ensure the turn is always marked complete, even on crash.
     if (!turnCompleted) {
       dbTurns.complete(turn.id);
       dbSessions.touch(sessionId);
@@ -185,3 +163,6 @@ async function runTurnInner(
     throw err; // re-throw so the handler can still react to the error
   }
 }
+
+/** Live tool content is capped to avoid frontend render thrashing; full text is persisted. */
+const TOOL_LIVE_CAP = 200;

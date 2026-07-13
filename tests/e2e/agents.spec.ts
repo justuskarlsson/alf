@@ -1,21 +1,44 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { goToRepo, withAgentsPanel } from "./helpers";
 
-// The test impl emits:
-//   thinking: "Analysing the request... Forming a plan. Ready."
-//   tool:     "read_file: <repo>/README.md"
-//   text:     "Echo: <prompt>"  (word by word)
-// Each activity chunk has a ~50ms delay → full turn ~250ms.
+// These tests drive the real Cursor agent backend. Keep prompts tiny and use a
+// cheap model (set CURSOR_MODEL on the test backend) so runs are fast and cheap.
+// Assistant output is non-deterministic, so message tests assert on:
+//   - the user prompt echo (deterministic, shown immediately), and
+//   - turn completion + a persisted text activity (not exact content).
 //
-// Frontend defaults to "claude-code" impl. Tests that send messages need the
-// test impl — use selectTestImpl() after creating a session.
+// A live turn takes seconds, so message tests use a generous timeout.
 
-import type { Page } from "@playwright/test";
+/** A trivial prompt that resolves quickly on any model. */
+const PROMPT = "Reply with exactly the word: ok";
+/** Cheapest curated model — keeps live e2e runs cheap and fast. */
+const CHEAP_MODEL = "claude-haiku-4-5";
+/** Max time to allow a real turn to finish. */
+const TURN = 120_000;
 
-/** Switch the impl selector to "test" so messages use the deterministic test impl. */
-async function selectTestImpl(page: Page) {
-  await expect(page.getByTestId("impl-selector")).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId("impl-selector").selectOption("test");
+async function newSession(page: Page) {
+  await page.getByTestId("new-session-btn").click();
+  await expect(page.getByTestId("prompt-input")).toBeVisible({ timeout: 5_000 });
+  // Use the cheap model for every live turn.
+  await page.getByTestId("model-selector").selectOption(CHEAP_MODEL);
+}
+
+async function send(page: Page, text: string) {
+  await page.getByTestId("prompt-input").fill(text);
+  await page.getByRole("button", { name: "send" }).click();
+}
+
+/** Wait until the running turn finishes (stop button gone, send button back). */
+async function waitTurnDone(page: Page) {
+  await expect(page.getByTestId("stop-btn")).toHaveCount(0, { timeout: TURN });
+  await expect(page.getByRole("button", { name: "send" })).toBeVisible({ timeout: 5_000 });
+}
+
+/** A persisted (non-live) text activity has rendered in the feed. */
+async function expectAssistantText(page: Page) {
+  await expect(page.getByTestId("chat-feed").locator("[data-activity-type='text']").first())
+    .toBeVisible({ timeout: TURN });
 }
 
 test.describe("Agents panel", () => {
@@ -40,23 +63,17 @@ test.describe("Agents panel", () => {
   });
 
   test("multiple sessions appear in list", async ({ page }) => {
-    // Create two sessions; each click should auto-select the new session
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("prompt-input")).toBeVisible({ timeout: 5_000 });
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("prompt-input")).toBeVisible({ timeout: 5_000 });
-    // At least 2 sessions in the list (DB may have more from prior runs)
+    await newSession(page);
+    await newSession(page);
     const count = await page.getByTestId("session-list").getByText("New session").count();
     expect(count).toBeGreaterThanOrEqual(2);
   });
 
-  // ── Messaging & streaming ───────────────────────────────────────────────────
+  // ── Messaging ─────────────────────────────────────────────────────────────
 
   test("send message → pending prompt appears immediately in feed", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    await page.getByTestId("prompt-input").fill("hello world");
-    await page.getByRole("button", { name: "send" }).click();
+    await newSession(page);
+    await send(page, "hello world");
 
     // Pending prompt shown right away (before any server response)
     await expect(page.getByTestId("chat-feed")).toContainText("hello world");
@@ -64,54 +81,31 @@ test.describe("Agents panel", () => {
     await expect(page.getByTestId("prompt-input")).toHaveValue("");
   });
 
-  test("streaming — live thinking activity appears while running", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    await page.getByTestId("prompt-input").fill("stream test");
-    await page.getByRole("button", { name: "send" }).click();
-
-    // Thinking chunks stream in — "Analysing" is first chunk
-    await expect(page.getByTestId("chat-feed")).toContainText("Analysing", { timeout: 5_000 });
-  });
-
-  test("full turn — all three activity types persist after completion", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    await page.getByTestId("prompt-input").fill("hello");
-    await page.getByRole("button", { name: "send" }).click();
-
-    // Wait for turn to complete (text echo appears)
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: hello", { timeout: 10_000 });
-
-    // All three activity types should be in the feed
-    await expect(page.getByTestId("chat-feed")).toContainText("Analysing");
-    await expect(page.getByTestId("chat-feed")).toContainText("read_file");
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: hello");
+  test("full turn — completes and renders a text response", async ({ page }) => {
+    await newSession(page);
+    await send(page, PROMPT);
+    await waitTurnDone(page);
+    await expectAssistantText(page);
   });
 
   test("input re-enables after turn completes", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    await page.getByTestId("prompt-input").fill("ping");
-    await page.getByRole("button", { name: "send" }).click();
-
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: ping", { timeout: 10_000 });
+    await newSession(page);
+    await send(page, PROMPT);
+    await waitTurnDone(page);
     await expect(page.getByTestId("prompt-input")).toBeEnabled();
   });
 
   // ── Input ───────────────────────────────────────────────────────────────────
 
   test("Enter key sends message (not Shift+Enter)", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
+    await newSession(page);
     await page.getByTestId("prompt-input").fill("enter key test");
     await page.getByTestId("prompt-input").press("Enter");
     await expect(page.getByTestId("chat-feed")).toContainText("enter key test");
   });
 
   test("Shift+Enter inserts newline instead of sending", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
+    await newSession(page);
     const input = page.getByTestId("prompt-input");
     await input.fill("line one");
     await input.press("Shift+Enter");
@@ -136,10 +130,8 @@ test.describe("Agents panel", () => {
 
   test("clicking a session focuses the prompt input", async ({ page }) => {
     // Create two sessions so we can click between them
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("prompt-input")).toBeVisible({ timeout: 5_000 });
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("prompt-input")).toBeVisible({ timeout: 5_000 });
+    await newSession(page);
+    await newSession(page);
 
     // Click the second session in the list (first one created, now at index 1)
     await page.evaluate(() => {
@@ -169,46 +161,19 @@ test.describe("Agents panel", () => {
   // ── Markdown rendering ────────────────────────────────────────────────────
 
   test("finished text activity renders markdown", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    // Send a prompt that will be echoed — the test impl echoes "Echo: <prompt>"
-    // Use a prompt with markdown-like content to verify rendering
-    await page.getByTestId("prompt-input").fill("hello");
-    await page.getByRole("button", { name: "send" }).click();
+    await newSession(page);
+    await send(page, PROMPT);
+    await waitTurnDone(page);
 
-    // Wait for turn to complete
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: hello", { timeout: 10_000 });
-
-    // Text activities should be rendered inside a markdown container (prose class or ReactMarkdown output)
-    const textActivity = page.getByTestId("chat-feed").locator("[data-activity-type='text']");
-    await expect(textActivity).toBeVisible();
-    // It should have the prose container for markdown
+    // Text activities are rendered inside a markdown (prose) container.
+    const textActivity = page.getByTestId("chat-feed").locator("[data-activity-type='text']").first();
+    await expect(textActivity).toBeVisible({ timeout: TURN });
     await expect(textActivity.locator(".prose")).toBeVisible();
   });
 
-  // ── Streaming UI updates ──────────────────────────────────────────────────
+  // ── WS protocol: response timing ─────────────────────────────────────────
 
-  test("streaming — content updates incrementally in the UI", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    // Use a JSON prompt with larger delay so we can observe incremental updates
-    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":200}');
-    await page.getByRole("button", { name: "send" }).click();
-
-    const feed = page.getByTestId("chat-feed");
-
-    // First we should see thinking start
-    await expect(feed).toContainText("Analysing", { timeout: 5_000 });
-    // Then eventually the full text echo — but verify it appeared word by word
-    // by checking that "Echo:" appears before the full text
-    await expect(feed).toContainText("Echo:", { timeout: 15_000 });
-    // Final complete text
-    await expect(feed).toContainText("Echo:", { timeout: 15_000 });
-  });
-
-  // ── WS protocol: response timing & streaming deltas ──────────────────────
-
-  test("agent/message reply arrives before first delta", async ({ page }) => {
+  test("agent/message reply arrives before turn/done", async ({ page }) => {
     // Intercept WS frames to verify response ordering
     const frames: { type: string; ts: number }[] = [];
     page.on("websocket", ws => {
@@ -224,115 +189,31 @@ test.describe("Agents panel", () => {
 
     await page.reload(); // re-establish WS with listener active
     await expect(page.getByTestId("new-session-btn")).toBeVisible();
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("prompt-input")).toBeVisible();
-    await selectTestImpl(page);
-
-    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":100}');
-    await page.getByRole("button", { name: "send" }).click();
-
-    // Wait for turn to complete
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo:", { timeout: 15_000 });
+    await newSession(page);
+    await send(page, PROMPT);
+    await waitTurnDone(page);
 
     const reply = frames.find(f => f.type === "agent/message");
-    const firstDelta = frames.find(f => f.type === "agent/delta");
     const turnDone = frames.find(f => f.type === "agent/turn/done");
 
     expect(reply).toBeTruthy();
-    expect(firstDelta).toBeTruthy();
     expect(turnDone).toBeTruthy();
-    // Reply must arrive before or at the same time as first delta
-    expect(reply!.ts).toBeLessThanOrEqual(firstDelta!.ts);
-    // Reply must arrive before turn/done
+    // Reply (which carries the sessionId) must arrive before the turn completes.
     expect(reply!.ts).toBeLessThan(turnDone!.ts);
   });
 
-  test("subscribe delivers multiple incremental delta events", async ({ page }) => {
-    // Collect all delta frames to verify streaming granularity
-    const deltas: { activityType: string; content: string; idx: number; ts: number }[] = [];
-    page.on("websocket", ws => {
-      ws.on("framereceived", data => {
-        try {
-          const msg = JSON.parse(data.payload as string);
-          if (msg.type === "agent/delta") {
-            deltas.push({
-              activityType: msg.activityType,
-              content: msg.content,
-              idx: msg.idx,
-              ts: Date.now(),
-            });
-          }
-        } catch {}
-      });
-    });
+  // ── Model selector ──────────────────────────────────────────────────────────
 
-    await page.reload();
-    await expect(page.getByTestId("new-session-btn")).toBeVisible();
+  test("model selector is visible when session is active", async ({ page }) => {
     await page.getByTestId("new-session-btn").click();
     await expect(page.getByTestId("prompt-input")).toBeVisible();
-    await selectTestImpl(page);
-
-    // Use 100ms delay — test impl emits ~7 chunks (3 thinking + 1 tool + 3 text words)
-    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":100}');
-    await page.getByRole("button", { name: "send" }).click();
-
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo:", { timeout: 15_000 });
-
-    // Should have received many individual deltas, not one big batch
-    expect(deltas.length).toBeGreaterThanOrEqual(5);
-
-    // Verify multiple activity types streamed
-    const types = new Set(deltas.map(d => d.activityType));
-    expect(types.has("thinking")).toBe(true);
-    expect(types.has("tool")).toBe(true);
-    expect(types.has("text")).toBe(true);
-
-    // Deltas should be spread over time (not all at once)
-    const firstTs = deltas[0].ts;
-    const lastTs = deltas[deltas.length - 1].ts;
-    expect(lastTs - firstTs).toBeGreaterThan(200); // at least 200ms spread
-  });
-
-  // ── Impl selector ──────────────────────────────────────────────────────────
-
-  test("impl selector is visible when session is active", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("prompt-input")).toBeVisible();
-    await expect(page.getByTestId("impl-selector")).toBeVisible();
-  });
-
-  test("impl selector can switch between implementations", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await expect(page.getByTestId("impl-selector")).toBeVisible();
-    const selector = page.getByTestId("impl-selector");
-    // Default is "claude-code"
-    await expect(selector).toHaveValue("claude-code");
-    // Switch to test
-    await selector.selectOption("test");
-    await expect(selector).toHaveValue("test");
-    // Switch back
-    await selector.selectOption("claude-code");
-    await expect(selector).toHaveValue("claude-code");
-  });
-
-  test("model selector visible for claude-code, hidden for test", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    // Default impl is claude-code → model selector should be visible
-    await expect(page.getByTestId("model-selector")).toBeVisible();
-    await expect(page.getByTestId("model-selector")).toHaveValue("claude-opus-4-6");
-    // Switch to test → model selector should disappear
-    await page.getByTestId("impl-selector").selectOption("test");
-    await expect(page.getByTestId("model-selector")).toBeHidden();
-    // Switch back → model selector reappears
-    await page.getByTestId("impl-selector").selectOption("claude-code");
     await expect(page.getByTestId("model-selector")).toBeVisible();
   });
 
-  // ── Persistence ─────────────────────────────────────────────────────────────
+  // ── Attachments ─────────────────────────────────────────────────────────────
 
   test("attach file button and file chips appear in composer", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
+    await newSession(page);
 
     // Verify attach button is visible
     await expect(page.getByTestId("attach-btn")).toBeVisible();
@@ -349,30 +230,21 @@ test.describe("Agents panel", () => {
     await expect(page.getByTestId("attached-files")).toBeVisible();
     await expect(page.getByTestId("attached-files")).toContainText("test-doc.txt");
 
-    // Take screenshot to verify visual
-    await page.screenshot({ path: "test-results/file-upload-chip.png" });
-
     // Send message with file attached
-    await page.getByTestId("prompt-input").fill("check this file");
-    await page.getByRole("button", { name: "send" }).click();
-
-    // Wait for response — test impl echoes prompt which includes "Attached files:" appended by backend
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo:", { timeout: 10_000 });
+    await send(page, "check this file");
 
     // Chips should be cleared after send
     await expect(page.getByTestId("attached-files")).toHaveCount(0);
-
-    // Take screenshot of completed turn
-    await page.screenshot({ path: "test-results/file-upload-sent.png" });
+    await waitTurnDone(page);
   });
 
+  // ── Fork & persistence ───────────────────────────────────────────────────
+
   test("fork button creates new session with copied history", async ({ page }) => {
-    // Create a session and send a message
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    await page.getByTestId("prompt-input").fill("original message");
-    await page.getByRole("button", { name: "send" }).click();
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: original message", { timeout: 10_000 });
+    await newSession(page);
+    await send(page, "original message");
+    await waitTurnDone(page);
+    await expect(page.getByTestId("chat-feed")).toContainText("original message");
 
     // Fork button should be visible (session has turns)
     const forkBtn = page.getByTestId("fork-btn");
@@ -382,18 +254,15 @@ test.describe("Agents panel", () => {
     // New session should appear in list with "Fork of" title
     await expect(page.getByTestId("session-list")).toContainText("Fork of", { timeout: 5000 });
 
-    // Forked session should have the copied history
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: original message", { timeout: 5000 });
-
-    await page.screenshot({ path: "test-results/fork-session.png" });
+    // Forked session should have the copied history (the user prompt)
+    await expect(page.getByTestId("chat-feed")).toContainText("original message", { timeout: 5000 });
   });
 
   test("session and history persist after page reload", async ({ page }) => {
-    await page.getByTestId("new-session-btn").click();
-    await selectTestImpl(page);
-    await page.getByTestId("prompt-input").fill("persist me");
-    await page.getByRole("button", { name: "send" }).click();
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: persist me", { timeout: 10_000 });
+    await newSession(page);
+    await send(page, "persist me");
+    await waitTurnDone(page);
+    await expect(page.getByTestId("chat-feed")).toContainText("persist me");
 
     // Reload the page
     await page.reload();
@@ -403,12 +272,11 @@ test.describe("Agents panel", () => {
     await expect(page.getByTestId("session-list")).toContainText("New session", { timeout: 10_000 });
 
     // Re-select the session — use JS click to bypass react-grid-layout overlay
-    await expect(page.getByTestId("session-list")).toContainText("New session", { timeout: 10_000 });
     await page.evaluate(() => {
       const el = document.querySelector('[data-testid="session-list"] .divide-y > div') as HTMLElement;
       el?.click();
     });
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo: persist me", { timeout: 10_000 });
+    await expect(page.getByTestId("chat-feed")).toContainText("persist me", { timeout: 10_000 });
   });
 
   // ── Stop button (placed last — abort can cause transient backend disruption) ──
@@ -417,39 +285,31 @@ test.describe("Agents panel", () => {
     page.on("dialog", d => d.accept("stop-appear-test"));
     await page.getByTestId("new-session-btn").click();
     await expect(page.getByTestId("session-list")).toContainText("stop-appear-test", { timeout: 5_000 });
-    await selectTestImpl(page);
-    // Use a long delay so the turn takes ~2s — enough time to observe the stop button
-    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":300}');
-    await page.getByRole("button", { name: "send" }).click();
+    await page.getByTestId("model-selector").selectOption(CHEAP_MODEL);
+    await send(page, PROMPT);
 
     // Stop button should appear while running
-    await expect(page.getByTestId("stop-btn")).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByTestId("stop-btn")).toBeVisible({ timeout: 10_000 });
 
     // Wait for turn to complete naturally
-    await expect(page.getByTestId("chat-feed")).toContainText("Echo:", { timeout: 15_000 });
-
-    // Stop button disappears after completion
-    await expect(page.getByTestId("stop-btn")).not.toBeVisible({ timeout: 3_000 });
+    await waitTurnDone(page);
   });
 
   test("clicking stop cancels the active turn", async ({ page }) => {
     page.on("dialog", d => d.accept("stop-cancel-test"));
     await page.getByTestId("new-session-btn").click();
     await expect(page.getByTestId("session-list")).toContainText("stop-cancel-test", { timeout: 5_000 });
-    await selectTestImpl(page);
-    // Long delay — turn would take ~5s without stop
-    await page.getByTestId("prompt-input").fill('{"path":"ping","delay":500}');
-    await page.getByRole("button", { name: "send" }).click();
+    await page.getByTestId("model-selector").selectOption(CHEAP_MODEL);
+    await send(page, "Write a long detailed essay about the history of computing.");
 
     // Wait for stop button to appear
-    await expect(page.getByTestId("stop-btn")).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByTestId("stop-btn")).toBeVisible({ timeout: 10_000 });
 
     // Click stop
     await page.getByTestId("stop-btn").click();
 
-    // Stop button disappears and input re-enables
-    await expect(page.getByTestId("stop-btn")).not.toBeVisible({ timeout: 5_000 });
-    // Send button re-enables (isRunning cleared) — proves turnDone was processed
-    await expect(page.getByRole("button", { name: "send" })).toBeVisible({ timeout: 3_000 });
+    // Stop button disappears and send button re-enables (isRunning cleared)
+    await expect(page.getByTestId("stop-btn")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "send" })).toBeVisible({ timeout: 5_000 });
   });
 });

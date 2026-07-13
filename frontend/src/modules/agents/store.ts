@@ -41,13 +41,15 @@ export interface LiveState {
   idx: number;
 }
 
-export const AVAILABLE_IMPLS = ["claude-code", "codex", "test"] as const;
+/** Curated Cursor model presets shown in the selector. */
+export const MODELS: { id: string; label: string }[] = [
+  { id: "composer-2.5", label: "Composer 2.5 · workhorse" },
+  { id: "gpt-5.5", label: "GPT-5.5 · expert" },
+  { id: "claude-haiku-4-5", label: "Haiku 4.5 · cheap" },
+];
 
-/** Models available per impl. Impls not listed here have no model selector. */
-export const MODEL_OPTIONS: Record<string, string[]> = {
-  "claude-code": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7"],
-  "codex": ["codex-high", "codex-max", "codex-medium", "codex-low"],
-};
+/** Default model for new turns. */
+export const DEFAULT_MODEL = MODELS[0].id;
 
 interface AgentsStore {
   sessions: AgentSession[];
@@ -60,8 +62,7 @@ interface AgentsStore {
   isRunning: boolean;
   pendingPrompt: string | null; // prompt sent but turn not yet done
   _focusTrigger: number; // incremented to trigger input focus
-  selectedImpl: string; // active impl for new turns / sessions
-  selectedModel: string; // active model (only used by impls in MODEL_OPTIONS)
+  selectedModel: string; // active Cursor model for new turns (one of MODELS)
   lastSeenMap: Record<string, number>; // sessionId → last-viewed timestamp (for unread indicator)
   contextUsage: ContextUsage | null; // latest context window usage for selected session
   lastCoord: AgentLastCoord | null; // incremental fetch cursor
@@ -74,7 +75,6 @@ interface AgentsStore {
   deleteSession: (id: string, request: WsRequest) => void;
   sendMessage: (prompt: string, request: WsRequest, files?: { name: string; base64: string; mimeType: string }[]) => void;
   stopSession: (request: WsRequest) => void;
-  setSelectedImpl: (impl: string) => void;
   setSelectedModel: (model: string) => void;
   appendDelta: (delta: AgentDelta) => void;
   turnDone: (sessionId: string, request: WsRequest, usage?: ContextUsage) => void;
@@ -91,8 +91,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   isRunning: false,
   pendingPrompt: null,
   _focusTrigger: 0,
-  selectedImpl: "claude-code",
-  selectedModel: "claude-opus-4-6",
+  selectedModel: DEFAULT_MODEL,
   contextUsage: null,
   lastCoord: null,
   lastSeenMap: JSON.parse(localStorage.getItem("alf-agent-last-seen") || "{}"),
@@ -169,8 +168,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   },
 
   createSession: (repo, title, request) => {
-    const impl = get().selectedImpl;
-    request<{ sessionId: string }>({ type: "agent/session/create", repo, impl })
+    request<{ sessionId: string }>({ type: "agent/session/create", repo })
       .then(res => {
         // Set title if not default, then optimistically prepend and select
         const finalTitle = title || "New session";
@@ -180,7 +178,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         }
         const stub: AgentSession = {
           id: res.sessionId, repo_id: "", title: finalTitle,
-          sdk_session_id: null, impl,
+          sdk_session_id: null, impl: "cursor",
           forked_from: null, fork_point_turn_idx: null,
           created_at: Date.now(), updated_at: Date.now(),
         };
@@ -201,7 +199,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         const parent = get().sessions.find(s => s.id === sid);
         const stub: AgentSession = {
           id: res.sessionId, repo_id: parent?.repo_id ?? "", title: `Fork of ${parent?.title ?? "session"}`,
-          sdk_session_id: null, impl: parent?.impl ?? get().selectedImpl,
+          sdk_session_id: null, impl: parent?.impl ?? "cursor",
           forked_from: sid, fork_point_turn_idx: null,
           created_at: Date.now(), updated_at: Date.now(),
         };
@@ -241,8 +239,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   sendMessage: (prompt, request, files) => {
     const sid = get().selectedSessionId;
     if (!sid || get().isRunning) return;
-    const impl = get().selectedImpl;
-    const model = MODEL_OPTIONS[impl] ? get().selectedModel : undefined;
+    const model = get().selectedModel;
     const now = Date.now();
     set(s => ({
       isRunning: true, pendingPrompt: prompt, live: null,
@@ -251,7 +248,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         .sort((a, b) => b.updated_at - a.updated_at),
     }));
     request<{ sessionId: string; status: string }>({
-      type: "agent/message", sessionId: sid, prompt, impl, model,
+      type: "agent/message", sessionId: sid, prompt, model,
       ...(files?.length ? { files } : {}),
     }).catch(console.error);
     // Actual response content arrives via agent/delta push → appendDelta
@@ -262,11 +259,6 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     if (!sid || !get().isRunning) return;
     request<{ ok: boolean }>({ type: "agent/stop", sessionId: sid }).catch(console.error);
     // turnDone will be triggered by the server via agent/turn/done push
-  },
-
-  setSelectedImpl: (impl) => {
-    const models = MODEL_OPTIONS[impl];
-    set({ selectedImpl: impl, ...(models ? { selectedModel: models[0] } : {}) });
   },
 
   setSelectedModel: (model) => set({ selectedModel: model }),

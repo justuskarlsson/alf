@@ -1,0 +1,174 @@
+/**
+ * Cursor Agent SDK driver — the single agent backend.
+ *
+ * Maps the Cursor SDK's streaming SDKMessages onto our ActivityEvent stream.
+ * We run in "full-activity" mode: an activity is emitted only once complete
+ * (no per-token deltas). Token-level deltas are available via `send({ onDelta })`
+ * but are intentionally not used here.
+ *
+ * Session continuity: each WS session maps to one Cursor agent. On the first
+ * turn we `Agent.create` and capture its `agentId`; on later turns we
+ * `Agent.resume(agentId)` so the SDK reconstructs the conversation from its own
+ * local store (separate from alf.db).
+ */
+
+import { Agent } from "@cursor/sdk";
+import type { SDKMessage } from "@cursor/sdk";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { REPOS_ROOT } from "../config.js";
+import { createLogger } from "../logger.js";
+import type { ActivityEvent, TurnContext } from "./types.js";
+
+const log = createLogger("cursor");
+
+/** Default Cursor model. Override per-turn via the model arg, or globally via env. */
+const DEFAULT_MODEL = process.env.CURSOR_MODEL ?? "composer-2.5";
+
+/**
+ * The SDK's native sandbox aborts on some hosts (e.g. WSL2). It's off by default
+ * — this is a SWE agent meant to edit the target repo anyway. Set CURSOR_SANDBOX=1
+ * to re-enable on hosts that support it.
+ */
+const SANDBOX_ENABLED = process.env.CURSOR_SANDBOX === "1";
+
+// ---------------------------------------------------------------------------
+// System prompt — loaded once at module init, prepended on the first turn.
+// The Cursor SDK has no dedicated system-prompt option for local agents, so we
+// fold it into the opening user message (and rely on .cursor/rules thereafter).
+// ---------------------------------------------------------------------------
+
+const PROMPT_PATH = process.env.SYSTEM_PROMPT_PATH
+  ?? resolve(process.cwd(), "../infra/prompts/system.md");
+
+let systemPrompt: string | undefined;
+try {
+  systemPrompt = readFileSync(PROMPT_PATH, "utf-8").trim() || undefined;
+  log.info("Loaded system prompt", { path: PROMPT_PATH });
+} catch {
+  log.warn("System prompt not found, continuing without it", { path: PROMPT_PATH });
+}
+
+// ---------------------------------------------------------------------------
+// Driver
+// ---------------------------------------------------------------------------
+
+/**
+ * Run one turn against the Cursor SDK. Emits ActivityEvents as it streams and
+ * returns the agentId so core can persist it for resume.
+ */
+export async function runCursorTurn(
+  prompt: string,
+  ctx: TurnContext,
+  emit: (event: ActivityEvent) => void,
+  signal?: AbortSignal,
+): Promise<{ sdkSessionId?: string }> {
+  const cwd = resolve(join(REPOS_ROOT, ctx.repo));
+  const model = { id: ctx.model ?? DEFAULT_MODEL };
+
+  // First turn gets the system prompt folded in; resumed turns already have context.
+  const fullPrompt = (!ctx.sdkSessionId && systemPrompt)
+    ? `${systemPrompt}\n\n---\n\n${prompt}`
+    : prompt;
+
+  const local = { cwd, sandboxOptions: { enabled: SANDBOX_ENABLED } };
+  const agent = ctx.sdkSessionId
+    ? await Agent.resume(ctx.sdkSessionId, { model, local })
+    : await Agent.create({ model, local });
+
+  // agentId is known immediately — surface it so core can persist/reply early.
+  emit({ event: "session_ready", sdkSessionId: agent.agentId });
+
+  try {
+    const run = await agent.send(fullPrompt);
+
+    // Bridge our AbortSignal to the SDK's cooperative cancel.
+    const onAbort = () => { void run.cancel().catch(() => {}); };
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    try {
+      for await (const msg of run.stream()) {
+        if (signal?.aborted) break;
+        handleMessage(msg, emit);
+      }
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
+
+    emit({ event: "turn_done" });
+    return { sdkSessionId: agent.agentId };
+  } finally {
+    agent.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Message mapping
+// ---------------------------------------------------------------------------
+
+/** Live tool content can be huge (file edits); the full text is still persisted. */
+const TOOL_CONTENT_CAP = 2000;
+
+function handleMessage(msg: SDKMessage, emit: (event: ActivityEvent) => void): void {
+  switch (msg.type) {
+    case "thinking": {
+      if (msg.text) emitActivity(emit, "thinking", msg.text);
+      break;
+    }
+
+    case "assistant": {
+      // Tool uses arrive separately as `tool_call`; here we only surface text.
+      for (const block of msg.message.content) {
+        if (block.type === "text" && block.text) emitActivity(emit, "text", block.text);
+      }
+      break;
+    }
+
+    case "tool_call": {
+      // Emitted twice (running → completed/error). Record only the terminal form.
+      if (msg.status === "running") break;
+      emitActivity(emit, "tool", formatTool(msg));
+      break;
+    }
+
+    case "status": {
+      if (msg.status === "ERROR") {
+        throw new Error(`Cursor agent error: ${msg.message ?? "unknown"}`);
+      }
+      break;
+    }
+
+    // system (init), user, task, request — nothing to persist.
+    default:
+      break;
+  }
+}
+
+/** Emit a complete activity as a start/end pair (no intermediate deltas). */
+function emitActivity(
+  emit: (event: ActivityEvent) => void,
+  activityType: "thinking" | "tool" | "text",
+  content: string,
+): void {
+  emit({ event: "activity_start", activityType });
+  emit({ event: "activity_end", activityType, content });
+}
+
+function formatTool(msg: Extract<SDKMessage, { type: "tool_call" }>): string {
+  const parts = [msg.name];
+  if (msg.args !== undefined) parts.push(cap(stringify(msg.args)));
+  if (msg.status === "error") parts.push(`(error)`);
+  return parts.join(": ");
+}
+
+function stringify(value: unknown): string {
+  if (typeof value === "string") return value;
+  try { return JSON.stringify(value); } catch { return String(value); }
+}
+
+function cap(s: string): string {
+  return s.length > TOOL_CONTENT_CAP ? s.slice(0, TOOL_CONTENT_CAP) + "…" : s;
+}
