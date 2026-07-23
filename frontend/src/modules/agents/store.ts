@@ -7,22 +7,34 @@ import { ScopedRequestCancelledError } from "../../core/useScopedRequest";
 
 type WsRequest = <T>(msg: Record<string, unknown>) => Promise<T>;
 
+/** Safe localStorage access (vitest node env has none). */
+const ls = {
+  get(key: string): string | null {
+    try { return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null; }
+    catch { return null; }
+  },
+  set(key: string, value: string): void {
+    try { if (typeof localStorage !== "undefined") localStorage.setItem(key, value); }
+    catch { /* ignore */ }
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Persisted session helpers (keyed by repo)
 // ---------------------------------------------------------------------------
 const SESSION_STORAGE_KEY = "alf-agent-session";
 function getPersistedSession(repo: string): string | null {
   try {
-    const map = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "{}");
+    const map = JSON.parse(ls.get(SESSION_STORAGE_KEY) || "{}");
     return map[repo] ?? null;
   } catch { return null; }
 }
 function setPersistedSession(repo: string, sessionId: string | null) {
   try {
-    const map = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "{}");
+    const map = JSON.parse(ls.get(SESSION_STORAGE_KEY) || "{}");
     if (sessionId) map[repo] = sessionId;
     else delete map[repo];
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(map));
+    ls.set(SESSION_STORAGE_KEY, JSON.stringify(map));
   } catch {}
 }
 
@@ -34,11 +46,13 @@ interface DetailResponse {
   contextUsage?: { contextTokens: number; maxContextTokens: number } | null;
 }
 
-/** Activity being built live from stream deltas — not yet persisted. */
+/** Activity being built (or already finished) during the in-progress turn. */
 export interface LiveState {
   activityType: "thinking" | "tool" | "text";
   content: string;
   idx: number;
+  /** false while chunks are still arriving; true once activity_end landed. */
+  done: boolean;
 }
 
 /** Curated Cursor model presets shown in the selector. */
@@ -58,7 +72,8 @@ interface AgentsStore {
   turns: AgentTurn[];
   activities: AgentActivity[]; // only text activities for completed turns
   hiddenCounts: Record<string, number>; // turnId → count of non-text activities (for expand UI)
-  live: LiveState | null;
+  /** In-progress turn activities (all of them — finished + currently streaming). */
+  live: LiveState[];
   isRunning: boolean;
   pendingPrompt: string | null; // prompt sent but turn not yet done
   _focusTrigger: number; // incremented to trigger input focus
@@ -87,14 +102,14 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   turns: [],
   activities: [],
   hiddenCounts: {},
-  live: null,
+  live: [],
   isRunning: false,
   pendingPrompt: null,
   _focusTrigger: 0,
   selectedModel: DEFAULT_MODEL,
   contextUsage: null,
   lastCoord: null,
-  lastSeenMap: JSON.parse(localStorage.getItem("alf-agent-last-seen") || "{}"),
+  lastSeenMap: JSON.parse(ls.get("alf-agent-last-seen") || "{}"),
 
   loadSessions: (repo, request) => {
     const isRepoChange = get().currentRepo !== repo;
@@ -113,7 +128,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         turns: [],
         activities: [],
         hiddenCounts: {},
-        live: null,
+        live: [],
         isRunning: false,
         pendingPrompt: null,
         contextUsage: null,
@@ -149,8 +164,8 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       request<AgentUnsubscribeMsg>({ type: "agent/unsubscribe", sessionId: prev }).catch(console.error);
     }
     const map = { ...get().lastSeenMap, [id]: Date.now() };
-    localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
-    set(s => ({ selectedSessionId: id, turns: [], activities: [], hiddenCounts: {}, live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
+    ls.set("alf-agent-last-seen", JSON.stringify(map));
+    set(s => ({ selectedSessionId: id, turns: [], activities: [], hiddenCounts: {}, live: [], isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null, _focusTrigger: s._focusTrigger + 1, lastSeenMap: map }));
     // Persist selected session for the current repo
     const repo = get().currentRepo;
     if (repo) setPersistedSession(repo, id);
@@ -228,7 +243,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
         set(s => {
           const sessions = s.sessions.filter(sess => sess.id !== id);
           const cleared = s.selectedSessionId === id
-            ? { selectedSessionId: null, turns: [], activities: [], hiddenCounts: {}, live: null, isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null }
+            ? { selectedSessionId: null, turns: [], activities: [], hiddenCounts: {}, live: [], isRunning: false, pendingPrompt: null, contextUsage: null, lastCoord: null }
             : {};
           return { sessions, ...cleared };
         });
@@ -242,7 +257,7 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     const model = get().selectedModel;
     const now = Date.now();
     set(s => ({
-      isRunning: true, pendingPrompt: prompt, live: null,
+      isRunning: true, pendingPrompt: prompt, live: [],
       sessions: s.sessions
         .map(sess => sess.id === sid ? { ...sess, updated_at: now } : sess)
         .sort((a, b) => b.updated_at - a.updated_at),
@@ -266,16 +281,26 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
   appendDelta: (delta) => {
     if (delta.sessionId !== get().selectedSessionId) return;
     set(s => {
-      const prev = s.live;
-      if (!prev || prev.idx !== delta.idx) {
-        // New activity starting
-        return { live: { activityType: delta.activityType, content: delta.content, idx: delta.idx } };
+      const list = s.live.slice();
+      const i = list.findIndex(a => a.idx === delta.idx);
+      if (i < 0) {
+        list.push({
+          activityType: delta.activityType,
+          content: delta.content,
+          idx: delta.idx,
+          done: !!delta.done,
+        });
+      } else {
+        const prev = list[i];
+        list[i] = {
+          ...prev,
+          activityType: delta.activityType,
+          // done:true delivers full content — replace so streamed chunks aren't duplicated.
+          content: delta.done ? (delta.content || prev.content) : prev.content + delta.content,
+          done: delta.done ? true : prev.done,
+        };
       }
-      // done:true delivers the full content — replace so we don't duplicate streamed chunks.
-      if (delta.done) {
-        return { live: { ...prev, content: delta.content || prev.content } };
-      }
-      return { live: { ...prev, content: prev.content + delta.content } };
+      return { live: list };
     });
   },
 
@@ -283,10 +308,10 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
     if (sessionId !== get().selectedSessionId) return;
     const now = Date.now();
     const map = { ...get().lastSeenMap, [sessionId]: now };
-    localStorage.setItem("alf-agent-last-seen", JSON.stringify(map));
+    ls.set("alf-agent-last-seen", JSON.stringify(map));
     const coord = get().lastCoord;
     set(s => ({
-      live: null, isRunning: false, pendingPrompt: null, lastSeenMap: map,
+      live: [], isRunning: false, pendingPrompt: null, lastSeenMap: map,
       contextUsage: usage ?? s.contextUsage,
       sessions: s.sessions
         .map(sess => sess.id === sessionId ? { ...sess, updated_at: now } : sess)

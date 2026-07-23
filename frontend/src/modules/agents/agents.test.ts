@@ -16,7 +16,7 @@ function resetStore() {
     selectedSessionId: null,
     turns: [],
     activities: [],
-    live: null,
+    live: [],
     isRunning: false,
     pendingPrompt: null,
   });
@@ -46,45 +46,57 @@ describe("useAgentsStore", () => {
     const s = useAgentsStore.getState();
     expect(s.sessions).toEqual([]);
     expect(s.selectedSessionId).toBeNull();
-    expect(s.live).toBeNull();
+    expect(s.live).toEqual([]);
     expect(s.isRunning).toBe(false);
   });
 
   // appendDelta — same idx accumulates
   it("appendDelta accumulates content for same idx", () => {
-    useAgentsStore.setState({ selectedSessionId: "s1", live: null });
+    useAgentsStore.setState({ selectedSessionId: "s1", live: [] });
     const { appendDelta } = useAgentsStore.getState();
 
     appendDelta(delta({ content: "foo", idx: 0 }));
     appendDelta(delta({ content: "bar", idx: 0 }));
 
-    expect(useAgentsStore.getState().live?.content).toBe("foobar");
-    expect(useAgentsStore.getState().live?.idx).toBe(0);
+    expect(useAgentsStore.getState().live).toHaveLength(1);
+    expect(useAgentsStore.getState().live[0].content).toBe("foobar");
+    expect(useAgentsStore.getState().live[0].idx).toBe(0);
   });
 
-  // appendDelta — idx change starts a new activity
-  it("appendDelta starts new activity when idx changes", () => {
-    useAgentsStore.setState({ selectedSessionId: "s1", live: null });
+  // appendDelta — idx change keeps previous activities visible
+  it("appendDelta keeps prior activities when idx changes", () => {
+    useAgentsStore.setState({ selectedSessionId: "s1", live: [] });
     const { appendDelta } = useAgentsStore.getState();
 
-    appendDelta(delta({ content: "thinking…", activityType: "thinking", idx: 0 }));
-    expect(useAgentsStore.getState().live?.activityType).toBe("thinking");
-
+    appendDelta(delta({ content: "thinking…", activityType: "thinking", idx: 0, done: true }));
     appendDelta(delta({ content: "result", activityType: "text", idx: 1 }));
-    const live = useAgentsStore.getState().live!;
-    expect(live.activityType).toBe("text");
-    expect(live.content).toBe("result");
-    expect(live.idx).toBe(1);
+
+    const live = useAgentsStore.getState().live;
+    expect(live).toHaveLength(2);
+    expect(live[0]).toMatchObject({ activityType: "thinking", content: "thinking…", done: true });
+    expect(live[1]).toMatchObject({ activityType: "text", content: "result", done: false });
+  });
+
+  // appendDelta — done:true replaces content
+  it("appendDelta replaces content when done is true", () => {
+    useAgentsStore.setState({ selectedSessionId: "s1", live: [] });
+    const { appendDelta } = useAgentsStore.getState();
+
+    appendDelta(delta({ content: "Hel", idx: 0 }));
+    appendDelta(delta({ content: "lo", idx: 0 }));
+    appendDelta(delta({ content: "Hello", idx: 0, done: true }));
+
+    expect(useAgentsStore.getState().live[0]).toMatchObject({ content: "Hello", done: true });
   });
 
   // appendDelta — ignores deltas for non-selected session
   it("appendDelta ignores deltas for a different session", () => {
-    useAgentsStore.setState({ selectedSessionId: "s2", live: null });
+    useAgentsStore.setState({ selectedSessionId: "s2", live: [] });
     const { appendDelta } = useAgentsStore.getState();
 
     appendDelta(delta({ sessionId: "s1" }));
 
-    expect(useAgentsStore.getState().live).toBeNull();
+    expect(useAgentsStore.getState().live).toEqual([]);
   });
 
   // sendMessage — sets isRunning + pendingPrompt
@@ -96,7 +108,7 @@ describe("useAgentsStore", () => {
     const s = useAgentsStore.getState();
     expect(s.isRunning).toBe(true);
     expect(s.pendingPrompt).toBe("do something");
-    expect(s.live).toBeNull();
+    expect(s.live).toEqual([]);
   });
 
   // sendMessage — no-op when already running
@@ -119,14 +131,14 @@ describe("useAgentsStore", () => {
       selectedSessionId: "s1",
       isRunning: true,
       pendingPrompt: "hi",
-      live: { activityType: "text", content: "resp", idx: 0 },
+      live: [{ activityType: "text", content: "resp", idx: 0, done: false }],
     });
 
     useAgentsStore.getState().turnDone("s1", req);
 
     // Immediate sync state
     const s = useAgentsStore.getState();
-    expect(s.live).toBeNull();
+    expect(s.live).toEqual([]);
     expect(s.isRunning).toBe(false);
     expect(s.pendingPrompt).toBeNull();
 

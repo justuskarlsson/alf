@@ -239,7 +239,7 @@ const ChatFeed = React.memo(function ChatFeed({ turns, activities, hiddenCounts,
   turns: AgentTurn[];
   activities: AgentActivity[];
   hiddenCounts: Record<string, number>;
-  live: LiveState | null;
+  live: LiveState[];
   pendingPrompt: string | null;
   selectedSessionId: string;
 }) {
@@ -648,13 +648,22 @@ function buildFeed(
   turns: AgentTurn[],
   activities: AgentActivity[],
   hiddenCounts: Record<string, number>,
-  live: LiveState | null,
+  live: LiveState[],
   pendingPrompt: string | null,
 ): FeedItemData[] {
   const items: FeedItemData[] = [];
 
-  if (live) {
-    items.push({ kind: "activity", activityType: live.activityType, content: live.content, live: true, id: "live" });
+  // flex-col-reverse: first array items sit at the visual bottom.
+  // Push live activities newest-first so the streaming one is at the bottom.
+  for (let i = live.length - 1; i >= 0; i--) {
+    const a = live[i];
+    items.push({
+      kind: "activity",
+      activityType: a.activityType,
+      content: a.content,
+      live: !a.done,
+      id: `live-${a.idx}`,
+    });
   }
   if (pendingPrompt) {
     items.push({ kind: "user", prompt: pendingPrompt, id: "pending" });
