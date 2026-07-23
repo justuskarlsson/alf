@@ -17,13 +17,14 @@ export interface ContextUsage {
 /**
  * Events emitted by the driver during a turn.
  *
- * Full-activity model: the driver emits an activity only once it is complete
- * (no per-token deltas). Core persists on `activity_end` and forwards a single
- * live update to subscribers.
+ * Streaming model: `activity_start` opens a slot, `activity_delta` appends
+ * chunks live, `activity_end` persists the full content. Tools are emitted as
+ * a start/end pair with no deltas (complete when the tool finishes).
  */
 export type ActivityEvent =
   | { event: "session_ready"; sdkSessionId: string }
   | { event: "activity_start"; activityType: ActivityType }
+  | { event: "activity_delta"; activityType: ActivityType; content: string }
   | { event: "activity_end";   activityType: ActivityType; content: string }
   | { event: "turn_done"; usage?: ContextUsage };
 

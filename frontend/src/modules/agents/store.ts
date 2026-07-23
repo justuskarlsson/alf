@@ -43,9 +43,9 @@ export interface LiveState {
 
 /** Curated Cursor model presets shown in the selector. */
 export const MODELS: { id: string; label: string }[] = [
-  { id: "composer-2.5", label: "Composer 2.5 · workhorse" },
-  { id: "gpt-5.5", label: "GPT-5.5 · expert" },
-  { id: "claude-haiku-4-5", label: "Haiku 4.5 · cheap" },
+  { id: "grok-4.5", label: "Grok 4.5 · workhorse" },
+  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol · expert" },
+  { id: "composer-2.5", label: "Composer 2.5 · cheap" },
 ];
 
 /** Default model for new turns. */
@@ -270,6 +270,10 @@ export const useAgentsStore = create<AgentsStore>((set, get) => ({
       if (!prev || prev.idx !== delta.idx) {
         // New activity starting
         return { live: { activityType: delta.activityType, content: delta.content, idx: delta.idx } };
+      }
+      // done:true delivers the full content — replace so we don't duplicate streamed chunks.
+      if (delta.done) {
+        return { live: { ...prev, content: delta.content || prev.content } };
       }
       return { live: { ...prev, content: prev.content + delta.content } };
     });

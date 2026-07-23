@@ -7,7 +7,10 @@ import type { LiveDelta } from "./types.js";
 
 // Disable the system-prompt prepend before any module (cursor.ts) is imported,
 // so the deterministic mock sees the bare prompt.
-vi.hoisted(() => { process.env.SYSTEM_PROMPT_PATH = "/nonexistent-system-prompt"; });
+vi.hoisted(() => {
+  process.env.SYSTEM_PROMPT_PATH = "/nonexistent-system-prompt";
+  process.env.CURSOR_API_KEY = process.env.CURSOR_API_KEY || "test-key";
+});
 
 // ---------------------------------------------------------------------------
 // Mock the Cursor SDK with a deterministic, free stream:

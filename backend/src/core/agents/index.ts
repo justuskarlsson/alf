@@ -116,6 +116,10 @@ async function runTurnInner(
           // Live placeholder so the UI can show the in-progress activity type.
           sink({ sessionId, activityType: event.activityType, content: "", idx: activityIdx, done: false });
 
+        } else if (event.event === "activity_delta") {
+          // Stream chunk into the current activity — same idx, not persisted yet.
+          sink({ sessionId, activityType: event.activityType, content: event.content, idx: activityIdx, done: false });
+
         } else if (event.event === "activity_end") {
           // Persist the full activity, then forward it live (tool content capped).
           dbActivities.create(turn.id, sessionId, event.activityType, event.content, activityIdx);
