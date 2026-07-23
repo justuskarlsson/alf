@@ -142,26 +142,28 @@ function PresetSelector({ activePreset, userPresets, onLoad, onSave, onDelete }:
 function AnnotationModeToggle() {
   const mode = useAnnotationStore(s => s.mode);
   const setMode = useAnnotationStore(s => s.setMode);
+  const isMobile = useIsMobile();
+  const touch = isMobile ? "min-h-11 min-w-11 flex items-center justify-center" : "px-2 py-0.5";
 
   return (
     <div className="flex items-center gap-1 mx-auto">
       <button
         onClick={() => setMode("text")}
         data-testid="annotation-text-btn"
-        className={`font-mono text-xs px-2 py-0.5 border rounded transition-colors select-none
+        className={`font-mono text-xs border rounded transition-colors select-none ${touch}
           ${mode === "text"
             ? "border-slate-500 text-slate-200 bg-alf-surface"
             : "border-alf-border text-slate-600 hover:text-slate-400 hover:border-slate-500"}`}
-        title="Text annotation mode"
+        title="Text annotation mode (tap again to exit)"
       >A</button>
       <button
         onClick={() => setMode("voice")}
         data-testid="annotation-voice-btn"
-        className={`font-mono text-xs px-2 py-0.5 border rounded transition-colors select-none
+        className={`font-mono text-xs border rounded transition-colors select-none ${touch}
           ${mode === "voice"
             ? "border-slate-500 text-slate-200 bg-alf-surface"
             : "border-alf-border text-slate-600 hover:text-slate-400 hover:border-slate-500"}`}
-        title="Voice annotation mode"
+        title="Voice annotation mode (tap again to exit)"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

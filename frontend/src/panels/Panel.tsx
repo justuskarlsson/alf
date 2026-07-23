@@ -5,6 +5,8 @@ import {
   PanelGroup,
   PanelResizeHandle,
 } from "react-resizable-panels";
+import { useIsMobile } from "../core/useIsMobile";
+import { useMobileSidebar } from "../core/mobileSidebar";
 
 export function Panel({ children }: { children: ReactNode }) {
   return <div className="h-full min-h-0 flex flex-col overflow-hidden bg-alf-canvas">{children}</div>;
@@ -17,18 +19,42 @@ interface SidebarLayoutProps {
   minSize?: number;
 }
 
+/**
+ * Desktop: resizable sidebar | main.
+ * Mobile: main full-bleed; sidebar is registered into MobileSidebarProvider
+ * so the top-bar hamburger in MobileSwipeView can open it as a sheet.
+ */
 export function SidebarLayout({ sidebar, main, defaultSize = 25, minSize = 15 }: SidebarLayoutProps) {
-  return (
-    <PanelGroup direction="horizontal" className="h-full w-full">
-      <ResizablePanel defaultSize={defaultSize} minSize={minSize}>
-        {sidebar}
-      </ResizablePanel>
-      <PanelResizeHandle className="w-px bg-alf-border hover:bg-slate-500 transition-colors cursor-col-resize" />
-      <ResizablePanel>
-        {main}
-      </ResizablePanel>
-    </PanelGroup>
-  );
+  const isMobile = useIsMobile();
+  const setContent = useMobileSidebar()?.setContent;
+
+  // Keep the registered sidebar in sync while this panel is mounted.
+  useEffect(() => {
+    if (!isMobile || !setContent) return;
+    setContent(sidebar);
+  }, [isMobile, setContent, sidebar]);
+
+  // Clear on unmount / leaving mobile so the next panel can take over.
+  useEffect(() => {
+    if (!isMobile || !setContent) return;
+    return () => setContent(null);
+  }, [isMobile, setContent]);
+
+  if (!isMobile) {
+    return (
+      <PanelGroup direction="horizontal" className="h-full w-full">
+        <ResizablePanel defaultSize={defaultSize} minSize={minSize}>
+          {sidebar}
+        </ResizablePanel>
+        <PanelResizeHandle className="w-px bg-alf-border hover:bg-slate-500 transition-colors cursor-col-resize" />
+        <ResizablePanel>
+          {main}
+        </ResizablePanel>
+      </PanelGroup>
+    );
+  }
+
+  return <div className="h-full w-full min-h-0">{main}</div>;
 }
 
 interface CollapsibleSectionProps {

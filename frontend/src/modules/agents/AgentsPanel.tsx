@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useRelay } from "../../core/RelayProvider";
 import { usePanelInit } from "../../core/usePanelInit";
+import { useIsMobile } from "../../core/useIsMobile";
 import { Panel, SidebarLayout, PanelHeader, EmptyState } from "../../panels/Panel";
 import { MarkdownRenderer } from "../../shared/MarkdownRenderer";
 import { useAgentsStore, MODELS, type LiveState } from "./store";
@@ -276,11 +277,13 @@ function ChatComposer() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
 
-  // Focus input whenever _focusTrigger increments (session select/create).
-  // Also focus on mount — ChatComposer may mount after the trigger already fired
-  // (e.g. first session creation transitions from EmptyState → ChatComposer).
+  // Desktop: focus on mount / session select so typing is immediate.
+  // Mobile: never autofocus — swipe-in remounts this composer and would pop the keyboard.
+  // Tap still focuses normally.
   useEffect(() => {
+    if (isMobile) return;
     if (useAgentsStore.getState().selectedSessionId) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -292,7 +295,7 @@ function ChatComposer() {
       }
     });
     return unsub;
-  }, []);
+  }, [isMobile]);
 
   function addFiles(fileList: FileList | File[]) {
     for (const file of Array.from(fileList)) {

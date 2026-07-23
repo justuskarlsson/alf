@@ -2,12 +2,12 @@
 id: T-051
 title: "Mobile: Stuff2Fix"
 type: task
-status: open
+status: in-progress
 priority: medium
 epic: ui
 effort: XL
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-07-23
 ---
 
 Umbrella ticket for mobile usability issues. The current layout was built desktop-first and several interactions are broken or awkward on phones.
@@ -28,11 +28,19 @@ When swiping to the agent screen, the text input gets auto-focused which brings 
 
 ## Acceptance
 
-- [ ] Annotations work on mobile without fighting native text selector
-- [ ] Swipe navigation and panel switching work reliably
-- [ ] Sidebars replaced with bottom hamburger menu on mobile
-- [ ] Agent screen text input doesn't auto-focus on swipe-in
-- [ ] Touch targets meet minimum size (~44px)
-- [ ] Layout usable on common phone screen sizes
+- [x] Annotations work on mobile without fighting native text selector
+- [x] Swipe navigation and panel switching work reliably
+- [x] Sidebars replaced with bottom hamburger menu on mobile
+- [x] Agent screen text input doesn't auto-focus on swipe-in
+- [ ] Touch targets meet minimum size (~44px) — tabs/dots/hamburger/annotation toggles done; composer chrome still small
+- [x] Layout usable on common phone screen sizes
 
 ## Notes
+
+<!-- 2026-07-23T11:40Z agent --> Started T-051. Implemented:
+- Agent composer: no autofocus on mobile (swipe remount was popping keyboard)
+- SidebarLayout: mobile bottom-left hamburger → sheet with sidebar content
+- MobileSwipeView: ignore swipes starting on inputs/scrollables; larger tabs; tappable dots; safe-area
+- Annotations: touchend + mouseup when mode on; mode still toggles off for native select; larger mobile A/mic targets
+<!-- 2026-07-23T12:00Z agent --> Moved hamburger from floating bottom-left (covered mic) into the
+mobile tab bar, left of Agents. Sheet still slides up from bottom.

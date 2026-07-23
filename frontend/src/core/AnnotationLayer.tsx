@@ -35,39 +35,42 @@ export function AnnotationLayer() {
   const popoverRef = useRef(popover);
   popoverRef.current = popover;
 
-  const handleMouseUp = useCallback(() => {
+  const handleSelectionEnd = useCallback(() => {
     if (!mode) return;
     if (popoverRef.current) return; // annotation already active — don't restart
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
 
-    const text = sel.toString().trim();
-    if (!text) return;
+    // iOS often finalizes the selection slightly after touchend — sample next frame.
+    const sample = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return;
 
-    // Don't trigger inside prompt-input textarea or annotation popover itself
-    const anchor = sel.anchorNode;
-    if (!anchor) return;
-    const el = anchor.nodeType === Node.ELEMENT_NODE ? (anchor as HTMLElement) : anchor.parentElement;
-    if (!el) return;
-    if (el.closest("[data-testid='prompt-input']") || el.closest("[data-annotation-popover]")) return;
+      const text = sel.toString().trim();
+      if (!text) return;
 
-    // Collect data-alf-ctx-* by walking up
-    const attrs = collectCtxAttrs(el);
-    const context: SelectionContext = { text, attrs };
+      // Don't trigger inside prompt-input textarea or annotation popover itself
+      const anchor = sel.anchorNode;
+      if (!anchor) return;
+      const el = anchor.nodeType === Node.ELEMENT_NODE ? (anchor as HTMLElement) : anchor.parentElement;
+      if (!el) return;
+      if (el.closest("[data-testid='prompt-input']") || el.closest("[data-annotation-popover]")) return;
 
-    // Get position rect
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
+      // Collect data-alf-ctx-* by walking up
+      const attrs = collectCtxAttrs(el);
+      const context: SelectionContext = { text, attrs };
 
-    setPopover({ context, rect });
-    setTextDraft("");
+      // Get position rect
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
 
-    if (mode === "text") {
-      // Focus will happen via useEffect after render
-    } else if (mode === "voice") {
-      // Start recording immediately
-      recordingPromiseRef.current = startRec();
-    }
+      setPopover({ context, rect });
+      setTextDraft("");
+
+      if (mode === "voice") {
+        recordingPromiseRef.current = startRec();
+      }
+    };
+
+    requestAnimationFrame(sample);
   }, [mode, startRec]);
 
   // Focus text input when popover appears in text mode
@@ -77,11 +80,16 @@ export function AnnotationLayer() {
     }
   }, [popover, mode]);
 
-  // Register global mouseup
+  // mouseup = desktop; touchend = mobile long-press selection.
+  // Only active while annotation mode is on — native selector works when mode is off.
   useEffect(() => {
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => document.removeEventListener("mouseup", handleMouseUp);
-  }, [handleMouseUp]);
+    document.addEventListener("mouseup", handleSelectionEnd);
+    document.addEventListener("touchend", handleSelectionEnd, { passive: true });
+    return () => {
+      document.removeEventListener("mouseup", handleSelectionEnd);
+      document.removeEventListener("touchend", handleSelectionEnd);
+    };
+  }, [handleSelectionEnd]);
 
   // Dismiss popover on Escape
   useEffect(() => {
