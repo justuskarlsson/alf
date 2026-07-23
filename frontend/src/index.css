@@ -114,3 +114,10 @@ html, body, #root {
   background-color: rgba(234, 179, 8, 0.25);
   transition: background-color 1.5s ease-out;
 }
+
+/* Annotation mode: suppress mobile OS text-callout (Copy / Share / Select All)
+   where the browser honors it. Selection still works; handles may remain. */
+html.alf-annotating,
+html.alf-annotating * {
+  -webkit-touch-callout: none;
+}

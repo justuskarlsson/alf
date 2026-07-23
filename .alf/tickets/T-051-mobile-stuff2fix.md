@@ -44,3 +44,6 @@ When swiping to the agent screen, the text input gets auto-focused which brings 
 - Annotations: touchend + mouseup when mode on; mode still toggles off for native select; larger mobile A/mic targets
 <!-- 2026-07-23T12:00Z agent --> Moved hamburger from floating bottom-left (covered mic) into the
 mobile tab bar, left of Agents. Sheet still slides up from bottom.
+<!-- 2026-07-23T12:15Z agent --> Bottom chrome: removed dots; moved hamburger+tabs to bottom bar.
+Annotation mode: html.alf-annotating + -webkit-touch-callout:none + contextmenu preventDefault
+to suppress Copy/Share callout where the browser allows (OS selection handles may remain).

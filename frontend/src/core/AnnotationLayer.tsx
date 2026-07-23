@@ -32,6 +32,26 @@ export function AnnotationLayer() {
     if (!mode) { setPopover(null); setTextDraft(""); }
   }, [mode]);
 
+  // While annotating: suppress OS callout (Copy/Share) where the browser allows it.
+  // Not fully OS-controllable — selection handles may still appear — but
+  // -webkit-touch-callout + contextmenu preventDefault kills most of the menu.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (mode) root.classList.add("alf-annotating");
+    else root.classList.remove("alf-annotating");
+    return () => root.classList.remove("alf-annotating");
+  }, [mode]);
+
+  useEffect(() => {
+    if (!mode) return;
+    function onContextMenu(e: Event) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    document.addEventListener("contextmenu", onContextMenu, { capture: true });
+    return () => document.removeEventListener("contextmenu", onContextMenu, { capture: true });
+  }, [mode]);
+
   const popoverRef = useRef(popover);
   popoverRef.current = popover;
 

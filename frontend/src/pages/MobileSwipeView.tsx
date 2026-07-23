@@ -73,8 +73,18 @@ function MobileSwipeViewInner({ panels, repo, renderPanel }: Props) {
 
   return (
     <div className="relative flex flex-col h-full">
-      {/* Tab bar — hamburger left of Agents, ~44px touch targets */}
-      <div className="flex items-center border-b border-alf-border bg-alf-canvas shrink-0 overflow-x-auto">
+      {/* Active panel */}
+      <div
+        className="flex-1 min-h-0"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {renderPanel(panel, repo)}
+      </div>
+
+      {/* Bottom nav — hamburger + panel tabs (replaces old dots) */}
+      <div className="flex items-center border-t border-alf-border bg-alf-canvas shrink-0 overflow-x-auto
+                      pb-[env(safe-area-inset-bottom)]">
         <button
           type="button"
           aria-label={sheetOpen ? "Close menu" : "Open menu"}
@@ -94,7 +104,7 @@ function MobileSwipeViewInner({ panels, repo, renderPanel }: Props) {
             onClick={() => setActiveIdx(i)}
             className={`min-h-11 px-4 text-xs font-mono whitespace-nowrap transition-colors
               ${i === activeIdx
-                ? "text-slate-200 border-b-2 border-slate-400"
+                ? "text-slate-200 border-t-2 border-slate-400"
                 : "text-slate-600 hover:text-slate-400"}`}
           >
             {p.title ?? PANEL_TYPES[p.type].label}
@@ -102,38 +112,7 @@ function MobileSwipeViewInner({ panels, repo, renderPanel }: Props) {
         ))}
       </div>
 
-      {/* Active panel */}
-      <div
-        className="flex-1 min-h-0"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {renderPanel(panel, repo)}
-      </div>
-
-      {/* Dot indicators — tappable */}
-      {panels.length > 1 && (
-        <div className="flex justify-center gap-1 py-1 shrink-0 bg-alf-canvas border-t border-alf-border
-                        pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-          {panels.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`Go to panel ${i + 1}`}
-              aria-current={i === activeIdx}
-              onClick={() => setActiveIdx(i)}
-              className="min-h-11 min-w-11 flex items-center justify-center"
-            >
-              <span
-                className={`block w-2 h-2 rounded-full transition-colors
-                  ${i === activeIdx ? "bg-slate-400" : "bg-slate-700"}`}
-              />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Sidebar sheet — opened from top hamburger */}
+      {/* Sidebar sheet — opened from bottom hamburger */}
       {sheetOpen && (
         <>
           <button
@@ -148,6 +127,7 @@ function MobileSwipeViewInner({ panels, repo, renderPanel }: Props) {
             className="absolute inset-x-0 bottom-0 z-50 flex flex-col
                        max-h-[85%] rounded-t-lg border-t border-alf-border
                        bg-alf-canvas shadow-[0_-8px_32px_rgba(0,0,0,0.45)]
+                       mb-[calc(2.75rem+env(safe-area-inset-bottom))]
                        pb-[env(safe-area-inset-bottom)]"
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-alf-border shrink-0">
