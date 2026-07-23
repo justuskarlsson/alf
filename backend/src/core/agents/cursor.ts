@@ -25,6 +25,9 @@ const log = createLogger("cursor");
 /** Default Cursor model. Override per-turn via the model arg, or globally via env. */
 const DEFAULT_MODEL = process.env.CURSOR_MODEL ?? "composer-2.5";
 
+/** Required — pass explicitly to Agent.create/resume (don't rely on SDK env fallback). */
+const API_KEY = process.env.CURSOR_API_KEY ?? "";
+
 /**
  * The SDK's native sandbox aborts on some hosts (e.g. WSL2). It's off by default
  * — this is a SWE agent meant to edit the target repo anyway. Set CURSOR_SANDBOX=1
@@ -71,10 +74,15 @@ export async function runCursorTurn(
     ? `${systemPrompt}\n\n---\n\n${prompt}`
     : prompt;
 
+  if (!API_KEY) {
+    throw new Error("CURSOR_API_KEY is not set — add it to infra/.env.dev and restart the backend");
+  }
+
   const local = { cwd, sandboxOptions: { enabled: SANDBOX_ENABLED } };
+  const opts = { model, local, apiKey: API_KEY };
   const agent = ctx.sdkSessionId
-    ? await Agent.resume(ctx.sdkSessionId, { model, local })
-    : await Agent.create({ model, local });
+    ? await Agent.resume(ctx.sdkSessionId, opts)
+    : await Agent.create(opts);
 
   // agentId is known immediately — surface it so core can persist/reply early.
   emit({ event: "session_ready", sdkSessionId: agent.agentId });
